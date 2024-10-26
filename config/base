@@ -1,0 +1,29 @@
+# @package _global_
+# this @package directive solves any nesting problem (if this file is included in another folder)
+
+# dataset
+datadim: 2
+batch_size: 256
+n_samples: 16384
+dataset: moons
+datanoise: 0.05
+
+optim:
+  lr: 1e-3
+
+# use source/normal.yaml
+source:
+  _target_: source.normal
+
+# logging
+logger: null # neptune, wandb
+tags: null
+logfreq: 5000
+evalfreq: 5000
+
+# variables we can access in our code
+job_name: 'results'
+# job_name: ${hydra:job.name}
+config_name: ${hydra:job.config_name}
+# Stores the command line arguments overrides
+override_dirname: ${hydra:job.override_dirname}

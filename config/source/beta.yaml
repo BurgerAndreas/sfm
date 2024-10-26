@@ -1,0 +1,9 @@
+# @package _global_
+# this @package directive solves any nesting problem (if this file is included in another folder)
+
+source:
+  type: beta
+  alpha: 4.0
+  beta: 4.0
+  lowerbound: -1.0
+  upperbound: 1.0
