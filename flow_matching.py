@@ -200,7 +200,7 @@ def get_dataset(n_samples: int, dataset: str = "moons", datanoise: float = 0.05,
 class Trainer:
     def __init__(self, cfg: Dict):
         self.cfg = cfg
-        self.cfg = init_logging(cfg)
+        self.cfg = self.init_logging(cfg)
 
         self.flow = CNF(cfg["datadim"], hidden_features=[64] * 3, source=cfg["source"])
         self.data: torch.Tensor = get_dataset(cfg["n_samples"], cfg["dataset"], cfg["datanoise"])
