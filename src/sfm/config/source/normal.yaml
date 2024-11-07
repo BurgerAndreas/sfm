@@ -1,3 +1,6 @@
 # @package _global_
 # this @package directive solves any nesting problem (if this file is included in another folder)
 
+source:
+  # _target_: sfm.distributions.normal
+  type: normal

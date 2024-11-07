@@ -3,7 +3,7 @@ import torch
 import numpy as np
 
 # Import your distributions
-from distributions import get_source_distribution
+from sfm.distributions import get_source_distribution
 
 # Define the distributions and their parameters
 distributions = {
@@ -12,7 +12,12 @@ distributions = {
     "isotropic": {"type": "isotropic", "mu": 2.0, "sigma": 0.5},
     "diagonal": {"type": "diagonal", "mu": torch.tensor([0.0, 0.0]), "sigma": torch.tensor([1.0, 0.5])},
     "beta": {"type": "beta", "alpha": 2.0, "beta": 2.0},
-    "mog": {"type": "mog", "mus": [torch.tensor([0.0, 0.0]), torch.tensor([5.0, 5.0])], "sigmas": [torch.tensor([1.0, 1.0]), torch.tensor([1.0, 1.0])], "pis": [0.5, 0.5]},
+    "mog": {
+        "type": "mog",
+        "mus": [torch.tensor([0.0, 0.0]), torch.tensor([5.0, 5.0])],
+        "sigmas": [torch.tensor([1.0, 1.0]), torch.tensor([1.0, 1.0])],
+        "pis": [0.5, 0.5],
+    },
     "cauchy": {"type": "cauchy", "loc": 0.0, "scale": 1.0},
     "chi2": {"type": "chi2", "df": 5.0},
     "dirichlet": {"type": "dirichlet", "concentration": torch.tensor([1.0, 2.0, 3.0])},
@@ -27,8 +32,17 @@ distributions = {
     "lkj": {"type": "lkj", "dim": 3, "concentration": 1.0},
     "laplace": {"type": "laplace", "loc": 0.0, "scale": 1.0},
     "lognormal": {"type": "lognormal", "loc": 0.0, "scale": 1.0},
-    "lowrank": {"type": "lowrank", "loc": torch.tensor([0.0, 0.0]), "cov_factor": torch.tensor([[1.0, 0.5], [0.5, 1.0]]), "cov_diag": torch.tensor([1.0, 1.0])},
-    "multivariate": {"type": "multivariate", "loc": torch.tensor([0.0, 0.0]), "covariance_matrix": torch.tensor([[1.0, 0.5], [0.5, 1.0]])},
+    "lowrank": {
+        "type": "lowrank",
+        "loc": torch.tensor([0.0, 0.0]),
+        "cov_factor": torch.tensor([[1.0, 0.5], [0.5, 1.0]]),
+        "cov_diag": torch.tensor([1.0, 1.0]),
+    },
+    "multivariate": {
+        "type": "multivariate",
+        "loc": torch.tensor([0.0, 0.0]),
+        "covariance_matrix": torch.tensor([[1.0, 0.5], [0.5, 1.0]]),
+    },
     "pareto": {"type": "pareto", "scale": 1.0, "alpha": 2.0},
     "relaxedbernoulli": {"type": "relaxedbernoulli", "logits": torch.tensor([0.0]), "temperature": 1.0},
     "studentt": {"type": "studentt", "df": 5.0, "loc": 0.0, "scale": 1.0},
@@ -139,9 +153,22 @@ distributions = {
 for name, params in distributions.items():
     print(f"Plotting {name.capitalize()} Distribution")
     dist = get_source_distribution(**params)
+    # We have multiple options here to visualize the distribution
+    # in the end we have a 2d grid of pixels
+    # 1. We can plot the density at one pixel (if pixels are independent)
+    # 2. We can plot a 2d heatmap (hist2d) of the density
+    # 3. We can sample from the distribution and plot the samples
+
+    # 1. Plot the density at one pixel
     x = torch.linspace(-5, 5, 1000)
-    y = torch.exp(dist.log_prob(x))
-    plt.figure()
+    y = dist.log_prob(x)
     plt.plot(x, y)
+
+    # 2. Plot a 2d heatmap of the density
+    x = torch.linspace(-5, 5, 100)
+
     plt.title(f"{name.capitalize()} Distribution")
-    plt.savefig(f"{name}_distribution.png")
+    fname = f"plots/sources/{name}_distribution.png"
+    plt.savefig(fname)
+    print(f" saved {fname}")
+    break

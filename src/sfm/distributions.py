@@ -13,6 +13,7 @@ from zuko.utils import odeint
 # 1. the sampling during training and testing
 # 2. the log-probability density function
 
+
 class SourceDistribution:
     def __init__(self, **kwargs):
         pass
@@ -28,7 +29,7 @@ class SourceDistribution:
             torch.Tensor: Log probabilities of the input samples.
         """
         return None
-    
+
     def sample(self, shape: int | tuple) -> Tensor:
         """
         Draw samples from the distribution.
@@ -51,10 +52,12 @@ class UniformSource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
-    
+
+
 def log_normal(x: Tensor) -> Tensor:
     """multivariate standard normal distribution, where the mean is 00 and the variance (or standard deviation squared) is 11 along every dimension."""
     return -(x.square() + math.log(2 * math.pi)).sum(dim=-1) / 2
+
 
 def log_isotropic_normal(x: Tensor, mu: float, sigma: float) -> Tensor:
     # normalization constant klog⁡(2πσ^2), where x.size(-1) gives the dimensionality kk
@@ -62,18 +65,22 @@ def log_isotropic_normal(x: Tensor, mu: float, sigma: float) -> Tensor:
     squared_term = ((x - mu).square().sum(dim=-1)) / sigma**2
     return -(squared_term + normalization_term) / 2
 
+
 def log_diagonal_normal(x: Tensor, mu: Tensor, sigma: Tensor) -> Tensor:
-    # assumes that the covariance matrix is diagonal. If the covariance matrix has off-diagonal terms (implying correlations between dimensions), 
+    # assumes that the covariance matrix is diagonal. If the covariance matrix has off-diagonal terms (implying correlations between dimensions),
     # you'd need to use the full multivariate Gaussian formula with the inverse of the covariance matrix and its determinant
     normalization_term = torch.log(2 * math.pi * sigma**2).sum(dim=-1)
     squared_term = (((x - mu).square()) / sigma**2).sum(dim=-1)
     return -(squared_term + normalization_term) / 2
 
+
 def log_normal(x: Tensor, mu: Tensor, Sigma: Tensor) -> Tensor:
     # Compute the Mahalanobis distance
     diff = x - mu
     inv_Sigma = torch.inverse(Sigma)
-    mahalanobis_distance = (diff.unsqueeze(-1).transpose(-1, -2) @ inv_Sigma @ diff.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+    mahalanobis_distance = (
+        (diff.unsqueeze(-1).transpose(-1, -2) @ inv_Sigma @ diff.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+    )
     # Compute the log determinant of the covariance matrix
     log_det_Sigma = torch.logdet(Sigma)
     # Number of dimensions
@@ -81,9 +88,13 @@ def log_normal(x: Tensor, mu: Tensor, Sigma: Tensor) -> Tensor:
     # Log probability calculation
     return -0.5 * (mahalanobis_distance + log_det_Sigma + k * math.log(2 * math.pi))
 
+
 def log_beta(x: Tensor, alpha: float, beta: float) -> Tensor:
-    beta_func = torch.lgamma(torch.tensor(alpha)) + torch.lgamma(torch.tensor(beta)) - torch.lgamma(torch.tensor(alpha + beta))
+    beta_func = (
+        torch.lgamma(torch.tensor(alpha)) + torch.lgamma(torch.tensor(beta)) - torch.lgamma(torch.tensor(alpha + beta))
+    )
     return ((alpha - 1) * x.log() + (beta - 1) * (1 - x).log() - beta_func).sum(dim=-1)
+
 
 class StandardNormalSource(SourceDistribution):
     def __init__(self, **kwargs):
@@ -95,6 +106,7 @@ class StandardNormalSource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return torch.randn(shape)
+
 
 class IsotropicGaussianSource(SourceDistribution):
     def __init__(self, mu: float = 0.0, sigma: float = 1.0, **kwargs):
@@ -112,10 +124,11 @@ class IsotropicGaussianSource(SourceDistribution):
         # Sample from Gaussian with mean=mu and std=sigma
         return self.mu + self.sigma * torch.randn(shape)
 
+
 class DiagonalGaussianSource(SourceDistribution):
     def __init__(self, mu: Tensor, sigma: Tensor, **kwargs):
         """
-        Diagonal Gaussian distribution is a special case of the 
+        Diagonal Gaussian distribution is a special case of the
         multivariate Gaussian distribution where the covariance matrix is diagonal.
         Meaning that the dimensions are uncorrelated.
         mu: Tensor of shape (d,) where d is the dimensionality of the distribution
@@ -130,7 +143,7 @@ class DiagonalGaussianSource(SourceDistribution):
         x: Tensor of shape (n, d) where n is the batch size and d is the dimensionality.
         """
         normalization_term = torch.log(2 * math.pi * self.sigma**2).sum(dim=-1)
-        squared_term = (((x - self.mu) ** 2) / (self.sigma ** 2)).sum(dim=-1)
+        squared_term = (((x - self.mu) ** 2) / (self.sigma**2)).sum(dim=-1)
         return -(squared_term + normalization_term) / 2
 
     def sample(self, shape: int | tuple) -> Tensor:
@@ -139,6 +152,7 @@ class DiagonalGaussianSource(SourceDistribution):
         shape: Tuple representing the shape of the samples (batch_size, d).
         """
         return self.mu + self.sigma * torch.randn(shape)
+
 
 class GaussianSource(SourceDistribution):
     def __init__(self, mu: Tensor, Sigma: Tensor, **kwargs):
@@ -157,11 +171,13 @@ class GaussianSource(SourceDistribution):
         x: Tensor of shape (n, d) where n is the batch size and d is the dimensionality.
         """
         diff = x - self.mu
-        mahalanobis_term = (diff.unsqueeze(-1).transpose(-1, -2) @ self.inv_Sigma @ diff.unsqueeze(-1)).squeeze(-1).squeeze(-1)
-        
+        mahalanobis_term = (
+            (diff.unsqueeze(-1).transpose(-1, -2) @ self.inv_Sigma @ diff.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+        )
+
         # Compute the number of dimensions
         k = x.size(-1)
-        
+
         return -0.5 * (mahalanobis_term + self.log_det_Sigma + k * math.log(2 * math.pi))
 
     def sample(self, shape: int | tuple) -> Tensor:
@@ -181,9 +197,10 @@ def log_mixture_of_gaussians(z: Tensor, mus: List[Tensor], sigmas: List[Tensor],
         # Compute log-probability for each Gaussian component
         log_prob = -0.5 * (((z - mu) / sigma).pow(2) + 2 * sigma.log() + math.log(2 * math.pi)).sum(dim=-1)
         log_probs.append(log_prob + math.log(pi))  # Add log of mixture weight
-    
+
     # Log-sum-exp for stability when summing probabilities in log-space
     return torch.logsumexp(torch.stack(log_probs, dim=-1), dim=-1)
+
 
 class MixtureOfGaussians(SourceDistribution):
     """
@@ -192,27 +209,29 @@ class MixtureOfGaussians(SourceDistribution):
     sigmas = [torch.tensor([1.0, 1.0]), torch.tensor([1.0, 1.0])]  # Std deviations for each component
     pis = [0.5, 0.5]  # Equal mixture weights
     """
+
     def __init__(self, mus: List[Tensor], sigmas: List[Tensor], pis: List[float], **kwargs):
         self.mus = mus  # List of means for each component
         self.sigmas = sigmas  # List of standard deviations (or covariance matrices)
         self.pis = pis  # List of mixture weights (sums to 1)
         self.K = len(mus)  # Number of components
-    
+
     def log_prob(self, z: Tensor) -> Tensor:
         return log_mixture_of_gaussians(z, self.mus, self.sigmas, self.pis)
 
     def sample(self, shape: Tuple[int]):
         # Sample component index based on mixture weights
         component = torch.multinomial(torch.tensor(self.pis), shape[0], replacement=True)
-        
+
         # For each sample, draw from the corresponding Gaussian component
         samples = []
         for i in range(shape[0]):
             mu = self.mus[component[i]]
             sigma = self.sigmas[component[i]]
             samples.append(torch.normal(mu, sigma))
-        
+
         return torch.stack(samples)
+
 
 class BetaSource(SourceDistribution):
     def __init__(self, alpha: float, beta: float, **kwargs):
@@ -229,6 +248,7 @@ class BetaSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class CauchySource(SourceDistribution):
     def __init__(self, loc: float, scale: float, **kwargs):
         """Symmetric, bell-shaped like the Gaussian distribution, but with heavier tails."""
@@ -240,9 +260,10 @@ class CauchySource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class Chi2Source(SourceDistribution):
     def __init__(self, df: float, **kwargs):
-        """ defined as the sum of the squares of kk independent standard normal random variables.
+        """defined as the sum of the squares of kk independent standard normal random variables.
         For low k values, the distribution is right-skewed, while for high k values, it approaches a normal distribution.
         """
         self.dist = torch.distributions.Chi2(df)
@@ -253,9 +274,10 @@ class Chi2Source(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 # class ContinuousBernoulliSource(SourceDistribution):
 #     def __init__(self, logits: Tensor, **kwargs):
-#         """Continuous Bernoulli is diffrent from the RelaxedBernoulli distribution 
+#         """Continuous Bernoulli is diffrent from the RelaxedBernoulli distribution
 #         in that it is being bounded between 0 and 1.
 #         PDF) that is piecewise linear, with a peak at either 0 or 1 depending on the value of λ.
 #         """
@@ -266,6 +288,7 @@ class Chi2Source(SourceDistribution):
 
 #     def sample(self, shape: int | tuple) -> Tensor:
 #         return self.dist.sample(shape)
+
 
 class DirichletSource(SourceDistribution):
     def __init__(self, concentration: Tensor, **kwargs):
@@ -280,6 +303,7 @@ class DirichletSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class ExponentialSource(SourceDistribution):
     def __init__(self, rate: float, **kwargs):
         self.dist = torch.distributions.Exponential(rate)
@@ -290,9 +314,10 @@ class ExponentialSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class FisherSnedecorSource(SourceDistribution):
     def __init__(self, df1: float, df2: float, **kwargs):
-        """ Fisher-Snedecor distribution, often simply referred to as the F-distribution, is a continuous probability distribution that arises frequently in the analysis of variance (ANOVA) and other statistical tests.
+        """Fisher-Snedecor distribution, often simply referred to as the F-distribution, is a continuous probability distribution that arises frequently in the analysis of variance (ANOVA) and other statistical tests.
         defined as the ratio of two chi-square distributions, each divided by their respective degrees of freedom.
         right-skewed and approaches symmetry as the degrees of freedom increase.
         """
@@ -304,6 +329,7 @@ class FisherSnedecorSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class GammaSource(SourceDistribution):
     def __init__(self, concentration: float, rate: float, **kwargs):
         self.dist = torch.distributions.Gamma(concentration, rate)
@@ -314,11 +340,12 @@ class GammaSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class GumbelSource(SourceDistribution):
     def __init__(self, loc: float, scale: float, **kwargs):
-        """ used in extreme value theory.
-        It is often used to model the distribution of the maximum (or minimum) 
-        of a number of samples from the same distribution, 
+        """used in extreme value theory.
+        It is often used to model the distribution of the maximum (or minimum)
+        of a number of samples from the same distribution,
         such as the highest temperature in a year or the largest flood in a century."""
         self.dist = torch.distributions.Gumbel(loc, scale)
 
@@ -327,6 +354,7 @@ class GumbelSource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
+
 
 class HalfCauchySource(SourceDistribution):
     def __init__(self, scale: float, **kwargs):
@@ -338,6 +366,7 @@ class HalfCauchySource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class HalfNormalSource(SourceDistribution):
     def __init__(self, scale: float, **kwargs):
         """HalfNormal distribution is a distribution of the absolute value of a random variable."""
@@ -348,6 +377,7 @@ class HalfNormalSource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
+
 
 class InverseGammaSource(SourceDistribution):
     def __init__(self, concentration: float, rate: float, **kwargs):
@@ -362,10 +392,11 @@ class InverseGammaSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class KumaraswamySource(SourceDistribution):
     def __init__(self, a: float, b: float, **kwargs):
         """Kumaraswamy distribution is a continuous probability distribution defined on the interval [0, 1].
-        Similar to the Beta distribution, but it's 
+        Similar to the Beta distribution, but it's
         probability density function, cumulative distribution function and quantile functions can be expressed in closed form.
         """
         self.dist = torch.distributions.Kumaraswamy(a, b)
@@ -375,6 +406,7 @@ class KumaraswamySource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
+
 
 class LKJCholeskySource(SourceDistribution):
     def __init__(self, dim: int, concentration: float = 1.0, **kwargs):
@@ -391,6 +423,7 @@ class LKJCholeskySource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class LaplaceSource(SourceDistribution):
     def __init__(self, loc: float, scale: float, **kwargs):
         """Laplacian distribution is a distribution of the difference between two independent exponential random variables.
@@ -404,6 +437,7 @@ class LaplaceSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class LogNormalSource(SourceDistribution):
     def __init__(self, loc: float, scale: float, **kwargs):
         """Describes the distribution of the logarithm of a random variable.
@@ -415,6 +449,7 @@ class LogNormalSource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
+
 
 class LowRankMultivariateNormalSource(SourceDistribution):
     def __init__(self, loc: Tensor, cov_factor: Tensor, cov_diag: Tensor, **kwargs):
@@ -429,6 +464,7 @@ class LowRankMultivariateNormalSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class MultivariateNormalSource(SourceDistribution):
     def __init__(self, loc: Tensor, covariance_matrix: Tensor, **kwargs):
         """Multivariate = multiple dimensions, normal = Gaussian distribution.
@@ -442,9 +478,10 @@ class MultivariateNormalSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class NormalSource(SourceDistribution):
     def __init__(self, loc: float, scale: float, **kwargs):
-        """Describes Gaussian distribution with mean=loc and std=scale, 
+        """Describes Gaussian distribution with mean=loc and std=scale,
         where all dimensions are uncorrelated and have the same mean and variance."""
         self.dist = torch.distributions.Normal(loc, scale)
 
@@ -454,10 +491,10 @@ class NormalSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class ParetoSource(SourceDistribution):
     def __init__(self, scale: float, alpha: float, **kwargs):
-        """Pareto distribution is a heavy tail characterized by the Pareto principle, also known as the 80/20 rule.
-        """
+        """Pareto distribution is a heavy tail characterized by the Pareto principle, also known as the 80/20 rule."""
         self.dist = torch.distributions.Pareto(scale, alpha)
 
     def log_prob(self, x: Tensor) -> Tensor:
@@ -465,6 +502,7 @@ class ParetoSource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
+
 
 class RelaxedBernoulliSource(SourceDistribution):
     def __init__(self, logits: Tensor, temperature: float, **kwargs):
@@ -478,6 +516,7 @@ class RelaxedBernoulliSource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
+
 
 # class LogitRelaxedBernoulliSource(SourceDistribution):
 #     def __init__(self, logits: Tensor, temperature: float, **kwargs):
@@ -503,6 +542,7 @@ class RelaxedBernoulliSource(SourceDistribution):
 #     def sample(self, shape: int | tuple) -> Tensor:
 #         return self.dist.sample(shape)
 
+
 class StudentTSource(SourceDistribution):
     def __init__(self, df: float, loc: float = 0.0, scale: float = 1.0, **kwargs):
         """Describes the distribution of the difference between two independent Gaussian random variables."""
@@ -513,6 +553,7 @@ class StudentTSource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
+
 
 # class TransformedDistributionSource(SourceDistribution):
 #     def __init__(self, base_distribution, transform, **kwargs):
@@ -525,6 +566,7 @@ class StudentTSource(SourceDistribution):
 #     def sample(self, shape: int | tuple) -> Tensor:
 #         return self.dist.sample(shape)
 
+
 class VonMisesSource(SourceDistribution):
     def __init__(self, loc: float, concentration: float, **kwargs):
         """Describes the distribution of angles on the unit circle."""
@@ -536,6 +578,7 @@ class VonMisesSource(SourceDistribution):
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
 
+
 class WeibullSource(SourceDistribution):
     def __init__(self, scale: float, concentration: float, **kwargs):
         """Weibull distribution describes the distribution of the minimum of a set of random variables."""
@@ -546,6 +589,7 @@ class WeibullSource(SourceDistribution):
 
     def sample(self, shape: int | tuple) -> Tensor:
         return self.dist.sample(shape)
+
 
 class WishartSource(SourceDistribution):
     def __init__(self, df: float, scale: Tensor, **kwargs):
@@ -590,7 +634,7 @@ _distributions = {
     "wishart": WishartSource,
 }
 
+
 def get_source_distribution(type: str = "gaussian", **kwargs):
-    assert type in _distributions, \
-        f"Unknown source distribution: {type}.\n Try one of {list(_distributions.keys())}"
+    assert type in _distributions, f"Unknown source distribution: {type}.\n Try one of {list(_distributions.keys())}"
     return _distributions[type.lower()](**kwargs)

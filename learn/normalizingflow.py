@@ -4,6 +4,7 @@ import torch.optim as optim
 import numpy as np
 import scipy.stats as stats
 
+
 class SimpleNormalizingFlow(nn.Module):
     def __init__(self):
         super(SimpleNormalizingFlow, self).__init__()
@@ -21,6 +22,7 @@ class SimpleNormalizingFlow(nn.Module):
         # Define the log-determinant of the Jacobian
         return z
 
+
 def compute_log_likelihood(x, nf):
     # Step 1: Compute the inverse transformation
     z = nf.inverse(x)
@@ -36,6 +38,7 @@ def compute_log_likelihood(x, nf):
 
     return log_p_x
 
+
 def train_normalizing_flow(nf, train_loader, optimizer, epochs):
     nf.train()
     for epoch in range(epochs):
@@ -49,6 +52,7 @@ def train_normalizing_flow(nf, train_loader, optimizer, epochs):
             total_loss += loss.item()
         print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(train_loader)}")
 
+
 def evaluate_normalizing_flow(nf, test_loader):
     nf.eval()
     total_log_likelihood = 0
@@ -59,8 +63,6 @@ def evaluate_normalizing_flow(nf, test_loader):
     avg_log_likelihood = total_log_likelihood / len(test_loader.dataset)
     print(f"Test Log-Likelihood: {avg_log_likelihood}")
     return avg_log_likelihood
-
-
 
 
 if __name__ == "__main__":
@@ -95,6 +97,7 @@ if __name__ == "__main__":
 # Optional
 from sklearn.neighbors import NearestNeighbors
 
+
 def compute_precision_recall(real_data, generated_data, k=5):
     """_summary_
     image quality (precision) and diversity (recall).
@@ -119,8 +122,10 @@ def compute_precision_recall(real_data, generated_data, k=5):
 
     return precision, recall
 
+
 def compute_f1_score(precision, recall):
     return 2 * (precision * recall) / (precision + recall)
+
 
 # Generate a simple dataset
 np.random.seed(0)
