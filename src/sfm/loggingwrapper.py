@@ -123,3 +123,44 @@ def get_logger(args):
         return LoggingWrapper(args, runname)
     else:
         raise ValueError("Invalid logger")
+
+class ArgsDict:
+    def __init__(self, args = {}):
+        self._args = args
+
+    def __getattr__(self, name):
+        return self._args[name]
+
+    def __setattr__(self, name, value):
+        self._args[name] = value
+
+    def __contains__(self, name):
+        return name in self._args
+
+    def __getitem__(self, name):
+        return self._args[name]
+
+    def __setitem__(self, name, value):
+        self._args[name] = value
+
+    def __repr__(self):
+        return repr(self._args)
+
+    def __str__(self):
+        return str(self._args)
+
+    def __iter__(self):
+        return iter(self._args)
+
+    def __len__(self):
+        return len(self._args)
+
+    def __dir__(self):
+        return dir(self._args)
+
+    def __eq__(self, other):
+        return self._args == other
+
+    def __ne__(self, other):
+        return self._args != other
+

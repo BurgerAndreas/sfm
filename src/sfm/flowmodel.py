@@ -159,7 +159,7 @@ class FlowMatchingLoss(nn.Module):
         """
         # Sample random time step from [0, 1]
         t = torch.rand_like(x[..., 0, None])
-        z = self.v.source.sample(x.shape)  # Sample from the source distribution
+        z = self.v.source.sample(x.shape[0])  # Sample from the source distribution
 
         # Interpolation between data and source according to the probability path
         # This corresponds to Eq. (20) for Optimal Transport (OT) paths

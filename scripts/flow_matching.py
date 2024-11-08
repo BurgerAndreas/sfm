@@ -90,7 +90,7 @@ class Trainer:
     def evaluate(self) -> Tuple[Tensor, Tensor]:
         # Generate samples from the flow
         with torch.no_grad():
-            z = self.flow.source.sample((self.cfg["n_samples"], self.cfg["datadim"]))
+            z = self.flow.source.sample(self.cfg["n_samples"])
             x = self.flow.decode(z)
 
         # Log-likelihood of true unseen data under the flow
@@ -102,7 +102,6 @@ class Trainer:
     def init_logging(self, cfg: Dict):
         self.logger = get_logger(cfg)
         # Create a directory for logging
-        print("cfg['source']", cfg["source"], flush=True)
         logdir = f"logs/{cfg['dataset']}_{cfg['source']['type']}"
         os.makedirs(logdir, exist_ok=True)
         cfg["logdir"] = logdir
