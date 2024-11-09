@@ -11,28 +11,56 @@ from sfm.distributions import get_source_distribution
 
 
 # Simple MLP architecture for the neural network modeling the vector field
-class MLP(nn.Sequential):
+class MLPwithTimeEmbedding(nn.Sequential):
     def __init__(
         self,
         in_features: int,
         out_features: int,
+        freqs: int = 3,
         hidden_features: List[int] = [64, 64],
+        time_varying: bool = True,
     ):
+        # "positional encoding" or "time embedding" and allows the network to adjust its behavior with respect to t
+        # with more granularity than by simply giving it as input the time t.
+        # part of the module's state but not a parameter
+        if time_varying is False:
+            nfreqs = 0
+        else:
+            nfreqs = int(max(0, freqs))
+            in_features = in_features + 2 * nfreqs
+        self.nfreqs = nfreqs
+        
         layers = []
-
         for a, b in zip(
             (in_features, *hidden_features),
             (*hidden_features, out_features),
         ):
             layers.extend([nn.Linear(a, b), nn.ELU()])
-
         super().__init__(*layers[:-1])
+        
+        if self.nfreqs > 0:
+            self.register_buffer("freqs", torch.arange(1, self.nfreqs + 1) * torch.pi)
+    
+    def forward(self, t: Tensor, x: Tensor = None) -> Tensor:
+        # Encode time with sinusoidal features to capture periodicity
+        if self.nfreqs > 0:
+            # t: [B] -> [B, 1]        
+            t = self.freqs * t[..., None] # [B, f]
+            t = torch.cat((t.cos(), t.sin()), dim=-1) # [B, 2f]
+            t = t.expand(*x.shape[:-1], -1) # [B, 2f]
+            x = torch.cat((t, x), dim=-1)
+        elif self.nfreqs == 0:
+            pass
+        else:
+            t = t[..., None] # [B, 1]
+            x = torch.cat((t, x), dim=-1)
+        return super().forward(x) # [B, D+2f]
 
 # Continuous Normalizing Flow (CNF) class
 # This class models the vector field v(t, x) that generates the probability path
 # Eq. (1) in the paper defines the vector field
 class CNF(nn.Module):
-    def __init__(self, features: int, source: Dict, freqs: int = 3, **kwargs):
+    def __init__(self, model: nn.Module, source: Dict, **kwargs):
         """Continuous Normalizing Flow (CNF) class
 
         Our continuous normalizing flow (CNF) is a simple multi-layer perceptron (MLP).
@@ -47,28 +75,17 @@ class CNF(nn.Module):
         super().__init__()
 
         self.source = get_source_distribution(**source)
-
-        self.net = MLP(in_features=2 * freqs + features, out_features=features, **kwargs)
-
-        # "positional encoding" or "time embedding" and allows the network to adjust its behavior with respect to t
-        # with more granularity than by simply giving it as input the time t.
-        # part of the module's state but not a parameter
-        self.register_buffer("freqs", torch.arange(1, freqs + 1) * torch.pi)
+        self.net = model
 
     def forward(self, t: Tensor, x: Tensor) -> Tensor:
-        # Encode time with sinusoidal features to capture periodicity
-        t = self.freqs * t[..., None]
-        t = torch.cat((t.cos(), t.sin()), dim=-1)
-        t = t.expand(*x.shape[:-1], -1)
-
         # Forward pass through the MLP network to model the vector field
-        return self.net(torch.cat((t, x), dim=-1))
+        return self.net(t, x)
 
     # Encode (from data to latent space)
     # Uses the ODE solving strategy described in Eq. (1)
     # The solver traces the flow from data (t=0) to noise (t=1)
     def encode(self, x: Tensor) -> Tensor:
-        return odeint(self, x, 0.0, 1.0, phi=self.parameters())
+        return odeint(f=self, x=x, t0=0.0, t1=1.0, phi=self.parameters())
 
     # Decode (from latent space to data)
     # Reverse the flow from noise (t=1) to data (t=0)
@@ -76,10 +93,10 @@ class CNF(nn.Module):
         """Go from source to data.
 
         Args:
-            z (Tensor): The initial state
+            z (Tensor): The initial state (noise) [B, D]
 
         Returns:
-            Tensor: generated sample
+            Tensor: generated sample [B, D]
         """
         return odeint(f=self, x=z, t0=1.0, t1=0.0, phi=self.parameters())
 

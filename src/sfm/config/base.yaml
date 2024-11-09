@@ -11,13 +11,21 @@ defaults:
 datadim: 2
 batch_size: 256
 n_samples: 16384
-n_trainsteps: 15000
+n_trainsteps: 16384
 dataset: moons
 datanoise: 0.05
 
 optim:
   lr: 1e-3
+  lr_min: 1e-4
 lr_schedule: constant
+
+model:
+  time_varying: true
+  in_features: ${datadim}
+  out_features: ${datadim}
+  hidden_features: [64, 64, 64, 64]
+  freqs: 3 # how many frequencies to use for the time embedding
 
 # logging
 logger: null # neptune, wandb
