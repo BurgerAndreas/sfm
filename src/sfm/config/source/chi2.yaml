@@ -1,5 +1,6 @@
 # @package _global_
 
 source: 
-  type: normal
+  df: 5.0
+  type: chi2
   

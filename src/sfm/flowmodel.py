@@ -130,13 +130,12 @@ class CNF(nn.Module):
         return self.source.log_prob(z) + ladj * 1e2
 
 
-# Loss function for flow matching
-# Implements the Flow Matching loss (Eq. 5 in the paper)
-class FlowMatchingLoss(nn.Module):
+
+class TargetConditionalFlowMatchingLoss(nn.Module):
     def __init__(self, v: nn.Module):
-        """Optimal transport (OT) flow matching loss
-        conditional flow matching loss (CMF) based on Equation 23
-        in the flow matching paper (https://arxiv.org/pdf/2210.02747.pdf)
+        """CFM loss based on Equation 23 in the flow matching paper 
+        https://arxiv.org/pdf/2210.02747.pdf
+        
         ψ_t(x) = y: conditional flow
         u:          vector field
         v:          CNF vector field v
@@ -144,8 +143,6 @@ class FlowMatchingLoss(nn.Module):
         σmin:       small variance at true samples
         x:          data
         z:          noise (x0 in the paper, x1 in the code)
-
-        linear interpolant of the std: σt(x) = 1 - (1 - σmin)
         """
         super().__init__()
         self.v = v
@@ -153,20 +150,29 @@ class FlowMatchingLoss(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         """Optimal Transport conditional VF of a Gaussian.
         OT for Gaussian:
-        Mean and std change linearly with t.
-        μt(x) = tx1, and σt(x) = 1 - (1 - σmin)t (20)
+        Mean and std change linearly with t:
+        μt(x) = t*x1
+        σt(x) = 1 - (1 - σmin)*t (20)
+        our convention of t=0 is the data and t=1 is the source,
+        i.e. t -> 1-t
+        μt(x) = (1-t)*x1 
+        σt(x) = 1 - (1 - σmin)*(1-t) = σmin + (1-σmin)*t
         pt = [(1 - t)id + tψ]*p0
         """
         # Sample random time step from [0, 1]
         t = torch.rand_like(x[..., 0, None])
-        z = self.v.source.sample(x.shape[0])  # Sample from the source distribution
+        # Sample from the source distribution 
+        z = self.v.source.sample(x.shape[0])  
 
-        # Interpolation between data and source according to the probability path
-        # This corresponds to Eq. (20) for Optimal Transport (OT) paths
+        # Interpolation between data and source
+        # y = μt(x) + σt(x)*z
         y = (1 - t) * x + (1e-4 + (1 - 1e-4) * t) * z
-        u = (1 - 1e-4) * z - x  # This is the target vector field, Eq. (21)
+        # This is the target vector field u in Eq. (21) and Eq. (23)
+        # ut(x|x1) = (x1 - (1-σmin)*x) / (1-(1-σmin)*(1-t))
+        # = (x1 - (1-σmin)*x) / (σmin + (1-σmin)*t)
+        u = (1 - 1e-4) * z - x  
 
         # Flow Matching loss: match the vector field to the target field
         # This minimizes the difference between v(t, y) and the target field u
-        # Based on Eq. (5) in the paper
+        # Based on Eq. (23) in the paper
         return (self.v(t.squeeze(-1), y) - u).square().mean()

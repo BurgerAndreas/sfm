@@ -1,0 +1,7 @@
+# @package _global_
+
+source: 
+  mu: [2.0, 1.0]
+  sigma: 0.5
+  type: isotropic
+  

@@ -1,5 +1,6 @@
 # @package _global_
 
 source: 
-  type: normal
+  scale: 1.0
+  type: halfcauchy
   

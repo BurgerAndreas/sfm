@@ -1,0 +1,7 @@
+# @package _global_
+
+source: 
+  mu: [0.0, 0.0]
+  sigma: [1.0, 0.5]
+  type: diagonal
+  

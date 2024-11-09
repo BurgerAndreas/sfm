@@ -2,6 +2,6 @@
 
 source: 
   alpha: 2.0
-  beta: 2.0
-  type: beta
+  scale: 1.0
+  type: pareto
   

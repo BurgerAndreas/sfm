@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
+import yaml
+import os
 
 # Import your distributions
 from sfm.distributions import get_source_distribution
@@ -73,3 +75,31 @@ if __name__ == "__main__":
         plt.savefig(fname)
         print(f" saved {fname}")
         plt.close()
+    
+
+    # Generate yaml files for each distribution
+    currentfile = os.path.abspath(__file__)
+    for name, params in distributions.items():
+        fname = f"{os.path.dirname(currentfile)}/../src/sfm/config/source/{name}.yaml"
+        
+        # Convert torch tensors to lists for YAML serialization
+        config = {}
+        for k, v in params.items():
+            if hasattr(v, 'tolist'):
+                config[k] = v.tolist()
+            else:
+                config[k] = v
+        
+        # Write the yaml file
+        with open(fname, 'w') as f:
+            # @package _global_
+            # add this line to the top of the file
+            f.write("# @package _global_\n\n")
+            f.write("source: \n  ")
+            # indent the rest of the file   
+            f.write(
+                yaml.dump(
+                    config, default_flow_style=False
+                ).replace("\n", "\n  ")
+            )
+        print(f"Created {fname}")

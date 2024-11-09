@@ -11,6 +11,7 @@ mamba activate sfm
 
 mamba install numpy==1.24.*3* matplotlib tqdm scikit-learn==1.3.* zuko omegaconf hydra-core wandb neptune black -y
 pip install torch==2.2.0+cu121 -f https://download.pytorch.org/whl/cu121/torch
+pip install torchvision==0.17.0+cu121 -f https://download.pytorch.org/whl/cu121/torchvision
 ```
 
 based on:

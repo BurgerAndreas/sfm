@@ -63,11 +63,11 @@ class IsotropicGaussianSource(SourceDistribution):
         """Isotropic Gaussian with mean=mu and std=sigma.
         Isotropic means that the covariance matrix is a multiple of the identity matrix.
         """
-        self.mu = mu
+        self.mu = torch.as_tensor(mu)
         self.sigma = sigma
         self.data_dim = data_dim
         self.dist = torch.distributions.MultivariateNormal(
-            loc=mu, 
+            loc=self.mu,
             covariance_matrix=torch.diag(torch.tensor([sigma] * data_dim))
         )
 
@@ -84,11 +84,11 @@ class DiagonalGaussianSource(SourceDistribution):
         mu: Tensor of shape (d,) where d is the dimensionality of the distribution
         sigma: Tensor of shape (d,) representing the standard deviation for each dimension
         """
-        self.mu = mu
-        self.sigma = sigma
+        self.mu = torch.as_tensor(mu)
+        self.sigma = torch.as_tensor(sigma)
         self.data_dim = data_dim
         self.dist = torch.distributions.MultivariateNormal(
-            loc=mu, covariance_matrix=torch.diag(sigma)
+            loc=self.mu, covariance_matrix=torch.diag(self.sigma)
         )
 
     def sample(self, nsamples: int | tuple) -> Tensor:
@@ -102,11 +102,11 @@ class GaussianSource(SourceDistribution):
         mu: Tensor of shape (d,) where d is the dimensionality of the distribution.
         Sigma: Tensor of shape (d, d), the covariance matrix.
         """
-        self.mu = mu
-        self.Sigma = Sigma
+        self.mu = torch.as_tensor(mu)
+        self.Sigma = torch.as_tensor(Sigma)
         assert Sigma.shape == (data_dim, data_dim), f"Sigma has wrong shape {Sigma.shape}"
         self.data_dim = data_dim
-        self.dist = torch.distributions.MultivariateNormal(mu, Sigma)
+        self.dist = torch.distributions.MultivariateNormal(self.mu, self.Sigma)
     
     def sample(self, nsamples: int | tuple) -> Tensor:
         return self.dist.sample((nsamples,))
@@ -120,10 +120,13 @@ class MixtureOfGaussians(SourceDistribution):
     pis = [0.5, 0.5]  # Equal mixture weights
     """
 
-    def __init__(self, mus: List[Tensor], sigmas: List[Tensor], pis: List[float], data_dim: int = 2, **kwargs):
-        self.mus = mus  # List of means for each component
-        self.sigmas = sigmas  # List of standard deviations (or covariance matrices)
-        self.mix = torch.distributions.Categorical(pis)  # List of mixture weights (sums to 1)
+    def __init__(self, mus: Tensor, sigmas: Tensor, pis: Tensor, data_dim: int = 2, **kwargs):
+        # means (components x dimensions)
+        self.mus = torch.as_tensor(mus)
+        # std deviations (components x dimensions)
+        self.sigmas = torch.as_tensor(sigmas)
+        # mixture weights (components)
+        self.mix = torch.distributions.Categorical(pis)
         self.K = len(mus)  # Number of components
         self.data_dim = data_dim
         assert mus.shape == (self.K, data_dim), f"mus has wrong shape {mus.shape}"
@@ -174,8 +177,9 @@ class DirichletSource(SourceDistribution):
         Meaning the dimensions are correlated.
         """
         self.data_dim = data_dim
+        self.concentration = torch.as_tensor(concentration)
         assert concentration.shape == (data_dim,), f"Concentration has wrong shape {concentration.shape}"
-        self.dist = torch.distributions.Dirichlet(concentration)
+        self.dist = torch.distributions.Dirichlet(self.concentration)
 
     def sample(self, nsamples: int | tuple) -> Tensor:
         return self.dist.sample((nsamples, ))
@@ -268,7 +272,10 @@ class LowRankMultivariateNormalSource(SourceDistribution):
         For example, in the context of neural networks, the distribution of the weights.
         Low-rank covariance matrix is a sum of a rank-r matrix and a diagonal matrix."""
         self.data_dim = data_dim
-        self.dist = torch.distributions.LowRankMultivariateNormal(loc, cov_factor, cov_diag)
+        self.loc = torch.as_tensor(loc)
+        self.cov_factor = torch.as_tensor(cov_factor)
+        self.cov_diag = torch.as_tensor(cov_diag)   
+        self.dist = torch.distributions.LowRankMultivariateNormal(self.loc, self.cov_factor, self.cov_diag)
 
     def sample(self, nsamples: int | tuple) -> Tensor:
         return self.dist.sample((nsamples, ))
@@ -280,8 +287,10 @@ class MultivariateNormalSource(SourceDistribution):
         Covariance matrix describes the relationship between the dimensions.
         """
         self.data_dim = data_dim
+        self.loc = torch.as_tensor(loc)
+        self.covariance_matrix = torch.as_tensor(covariance_matrix)
         assert covariance_matrix.shape == (data_dim, data_dim), f"Covariance matrix has wrong shape {covariance_matrix.shape}"
-        self.dist = torch.distributions.MultivariateNormal(loc, covariance_matrix)
+        self.dist = torch.distributions.MultivariateNormal(self.loc, self.covariance_matrix)
 
     def sample(self, nsamples: int | tuple) -> Tensor:
         return self.dist.sample((nsamples, ))
@@ -308,9 +317,10 @@ class RelaxedBernoulliSource(SourceDistribution):
         relaxing the discrete Bernoulli distribution to a continuous distribution.
         Temperature controls the degree of relaxation."""
         self.data_dim = data_dim
-        assert logits.shape == (data_dim,), f"Logits have wrong shape {logits.shape}"
+        self.logits = torch.as_tensor(logits)
+        assert self.logits.shape == (data_dim,), f"Logits have wrong shape {logits.shape}"
         self.dist = torch.distributions.RelaxedBernoulli(
-            temperature, logits=logits
+            temperature, logits=self.logits
         )
 
     def sample(self, nsamples: int | tuple) -> Tensor:

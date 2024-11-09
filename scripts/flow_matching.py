@@ -63,7 +63,7 @@ class Trainer:
         # Training loop for flow matching
         losses = []
         log_probs = []
-        for epoch in tqdm(range(self.cfg["n_samples"]), ncols=88):
+        for trainstep in tqdm(range(self.cfg["n_trainsteps"]), ncols=88):
             # Randomly select a batch of data
             subset = torch.randint(0, len(self.data_train), (self.cfg["batch_size"],))
             x = self.data_train[subset]
@@ -74,10 +74,10 @@ class Trainer:
             optimizer.step()
             losses.append(loss.item())
 
-            if epoch % self.cfg["logfreq"] == 0:
+            if trainstep % self.cfg["logfreq"] == 0:
                 self.logger.log({"loss": loss.item()}, step=self.step, split="train")
 
-            if epoch % self.cfg["evalfreq"] == 0:
+            if trainstep % self.cfg["evalfreq"] == 0:
                 gensamples, log_p = self.evaluate()
                 self.logger.log({"log_p": log_p.mean()}, step=self.step, split="val")
                 log_probs.append(log_p.mean())
