@@ -8,6 +8,8 @@ import omegaconf
 from omegaconf import DictConfig, OmegaConf
 import os
 
+import torchdyn
+
 import sklearn
 from sklearn.datasets import make_moons, make_circles
 
@@ -17,7 +19,9 @@ from typing import *
 from zuko.utils import odeint
 
 from sfm.loggingwrapper import get_logger
-from sfm.flowmodel import CNF, MLPwithTimeEmbedding, TargetConditionalFlowMatchingLoss
+from sfm.flowmodel import ContNormFlow, MLPwithTimeEmbedding, LipmanFMLoss, LipmanTCFMLoss, OTCFMLoss, CFMLoss, torchdyn_wrapper, NeuralODEWrapper
+
+from sfm.distributions import get_source_distribution
 
 def get_dataset(n_samples: int, dataset: str = "moons", datanoise: float = 0.05, **kwargs):
     if dataset == "moons":
@@ -62,7 +66,17 @@ class Trainer:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         model = MLPwithTimeEmbedding(**cfg['model'])
-        self.flow = CNF(model=model, source=cfg['source'])
+        if cfg['n_ode'] == 'zuko':
+            self.flow = ContNormFlow(model=model)
+        elif cfg['n_ode'] == 'torchdyn':
+            self.flow = NeuralODEWrapper(
+                model, solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
+            ).to(self.device)
+        else:
+            raise ValueError(f"Unknown neural ode type: {cfg['n_ode']}")
+        
+        self.sourcedist = get_source_distribution(**cfg['source'])
+        
         self.data: torch.Tensor = get_dataset(
             # 20% extra for validation set
             int(cfg['n_samples'] * 1.2),
@@ -76,7 +90,12 @@ class Trainer:
 
     def train(self) -> List[float]:
         # Training
-        loss_fn = TargetConditionalFlowMatchingLoss(self.flow)
+        if self.cfg['fmloss'] == 'lipman':
+            loss_fn = LipmanFMLoss(self.flow)
+        elif self.cfg['fmloss'] == 'tong':
+            loss_fn = CFMLoss(self.flow)
+        elif self.cfg['fmloss'] == 'ot':
+            loss_fn = OTCFMLoss(self.flow)
         optimizer = torch.optim.Adam(self.flow.parameters(), lr=self.cfg['optim']['lr'])
         lr_schedule = get_lr_schedule(optimizer, self.cfg)
 
@@ -84,11 +103,14 @@ class Trainer:
         losses = []
         log_probs = []
         for trainstep in tqdm(range(self.cfg['n_trainsteps']), ncols=88):
-            # Randomly select a batch of data
+            # Randomly select a batch of data = samples from the data distribution
             subset = torch.randint(0, len(self.data_train), (self.cfg['batch_size'],))
-            x = self.data_train[subset]
+            targets = self.data_train[subset]
+            # sample from the source distribution
+            sources = self.sourcedist.sample(self.cfg['batch_size'])
 
-            loss = loss_fn(x)
+            loss = loss_fn(sources=sources, targets=targets)
+            
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -111,16 +133,17 @@ class Trainer:
     def evaluate(self, eval_samples: int = None) -> Tuple[Tensor, Tensor]:
         # Generate samples from the flow
         with torch.no_grad():
-            z = self.flow.source.sample(eval_samples or self.cfg['n_samples'])
-            x = self.flow.decode(z) # [B, D]
+            sources = self.sourcedist.sample(eval_samples or self.cfg['n_samples'])
+            gen_targets = self.flow.decode(sources) # [B, D]
 
         # Log-likelihood of true unseen data under the flow
         with torch.no_grad():
             log_p = self.flow.log_prob(
-                self.data_val[: self.cfg['batch_size']] # [B, D]
+                targets=self.data_val[: self.cfg['batch_size']], # [B, D]
+                sourcedist=self.sourcedist,
             ) 
 
-        return x, log_p
+        return gen_targets, log_p
 
     def init_logging(self, cfg: Dict):
         self.logger = get_logger(cfg)

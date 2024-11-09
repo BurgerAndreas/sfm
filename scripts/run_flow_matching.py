@@ -34,7 +34,7 @@ def run_with_hydra(args: DictConfig) -> None:
     print(f"Loss after {cfg['n_samples']} n_samples: {losses[-1]:.3f}")
 
     trainer.finalize()
-    print("\nDone! ✅")
+    print("\nDone ✅")
 
 if __name__ == "__main__":
     run_with_hydra()

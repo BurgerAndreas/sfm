@@ -27,6 +27,9 @@ model:
   hidden_features: [64, 64, 64, 64]
   freqs: 3 # how many frequencies to use for the time embedding
 
+fmloss: lipman
+n_ode: zuko
+
 # logging
 logger: null # neptune, wandb
 tags: null

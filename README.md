@@ -7,7 +7,10 @@ mamba env remove --name sfm -y
 mamba create -n sfm python=3.11 -y
 mamba activate sfm
 
-mamba install numpy==1.24.*3* matplotlib tqdm scikit-learn==1.3.* zuko omegaconf hydra-core wandb neptune black -y
+mamba install requirements.txt -y
+pip install torchcfm==0.1.0
+
+# install torch however needed for your system
 pip install torch==2.2.0+cu121 -f https://download.pytorch.org/whl/cu121/torch
 pip install torchvision==0.17.0+cu121 -f https://download.pytorch.org/whl/cu121/torchvision
 ```

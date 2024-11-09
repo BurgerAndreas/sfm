@@ -34,7 +34,7 @@ class MLP(nn.Sequential):
         super().__init__(*layers[:-1])
 
 
-class CNF(nn.Module):
+class ContNormFlow(nn.Module):
     def __init__(self, features: int, freqs: int = 3, **kwargs):
         super().__init__()
 
@@ -92,7 +92,7 @@ class FlowMatchingLoss(nn.Module):
 
 
 if __name__ == '__main__':
-    flow = CNF(2, hidden_features=[64] * 3)
+    flow = ContNormFlow(2, hidden_features=[64] * 3)
 
     # Training
     loss = FlowMatchingLoss(flow)
