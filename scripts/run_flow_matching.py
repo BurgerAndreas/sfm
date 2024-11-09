@@ -37,6 +37,15 @@ def get_dataset(n_samples: int, dataset: str = "moons", datanoise: float = 0.05,
         raise ValueError(f"Unknown dataset: {dataset}")
     return data
 
+def get_lr_schedule(optimizer, cfg: Dict):
+    if cfg['lr_schedule'] == 'constant':
+        return torch.optim.lr_scheduler.ConstantLR(optimizer, factor=1.0, total_iters=cfg['n_trainsteps'])
+    elif cfg['lr_schedule'] == 'linear':
+        return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: cfg['optim']['lr'] * (1.0 - epoch / cfg['n_trainsteps']))
+    elif cfg['lr_schedule'] == 'cosine':
+        return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: cfg['optim']['lr'] * 0.5 * (1.0 + math.cos(math.pi * epoch / cfg['n_trainsteps'])))
+    else:
+        raise ValueError(f"Unknown lr schedule: {cfg['lr_schedule']}")
 
 class Trainer:
     def __init__(self, cfg: Dict):
@@ -59,6 +68,7 @@ class Trainer:
         # Training
         loss_fn = TargetConditionalFlowMatchingLoss(self.flow)
         optimizer = torch.optim.Adam(self.flow.parameters(), lr=self.cfg['optim']['lr'])
+        lr_schedule = get_lr_schedule(optimizer, self.cfg)
 
         # Training loop for flow matching
         losses = []
@@ -72,10 +82,11 @@ class Trainer:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            lr_schedule.step()
             losses.append(loss.item())
 
             if trainstep % self.cfg['logfreq'] == 0:
-                self.logger.log({"loss": loss.item()}, step=self.step, split="train")
+                self.logger.log({"loss": loss.item(), "lr": optimizer.param_groups[0]['lr']}, step=self.step, split="train")
 
             if trainstep % self.cfg['evalfreq'] == 0:
                 gensamples, log_p = self.evaluate()
@@ -169,7 +180,7 @@ def run_with_hydra(args: DictConfig) -> None:
     print(f"Loss after {cfg['n_samples']} n_samples: {losses[-1]:.3f}")
 
     trainer.finalize()
-
+    print("\nDone! ✅")
 
 if __name__ == "__main__":
     run_with_hydra()

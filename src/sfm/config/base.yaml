@@ -17,6 +17,7 @@ datanoise: 0.05
 
 optim:
   lr: 1e-3
+lr_schedule: constant
 
 # logging
 logger: null # neptune, wandb

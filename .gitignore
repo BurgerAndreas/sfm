@@ -1,6 +1,7 @@
 
 plots/*
 logs/*
+outputs/*
 
 **/*.png
 
