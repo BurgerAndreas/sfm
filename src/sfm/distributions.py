@@ -29,7 +29,7 @@ class SourceDistribution:
         Returns:
             torch.Tensor: Log probabilities of the input samples.
         """
-        return self.dist.log_prob(x)
+        return self.dist.log_prob(x).sum(dim=-1)
 
     def sample(self, nsamples: int | tuple) -> Tensor:
         """
@@ -43,6 +43,15 @@ class SourceDistribution:
         """
         return self.dist.sample((nsamples, self.data_dim))
 
+class CoupledSourceDistribution(SourceDistribution):
+    """Distributions where the data dimensions are coupled (not independent).
+    The log-probability and the samples have different shapes.
+    """
+    def log_prob(self, x: Tensor) -> Tensor:
+        return self.dist.log_prob(x)
+    
+    def sample(self, nsamples: int | tuple) -> Tensor:
+        return self.dist.sample((nsamples, ))
 
 class UniformSource(SourceDistribution):
     def __init__(self, low: float = 0.0, high: float = 1.0, data_dim: int = 2, **kwargs):
@@ -63,7 +72,7 @@ class StandardNormalSource(SourceDistribution):
     # def log_normal(x: Tensor) -> Tensor:
     #     return -(x.square() + math.log(2 * math.pi)).sum(dim=-1) / 2
 
-class IsotropicGaussianSource(SourceDistribution):
+class IsotropicGaussianSource(CoupledSourceDistribution):
     def __init__(self, mu: Tensor = torch.tensor([0.0, 0.0]), sigma: float = 1.0, data_dim: int = 2, **kwargs):
         """Isotropic Gaussian with mean=mu and std=sigma.
         Isotropic means that the covariance matrix is a multiple of the identity matrix.
@@ -76,11 +85,8 @@ class IsotropicGaussianSource(SourceDistribution):
             covariance_matrix=torch.diag(torch.tensor([sigma] * data_dim))
         )
 
-    def sample(self, nsamples: int | tuple) -> Tensor:
-        return self.dist.sample((nsamples, ))
 
-
-class DiagonalGaussianSource(SourceDistribution):
+class DiagonalGaussianSource(CoupledSourceDistribution):
     def __init__(self, mu: Tensor, sigma: Tensor, data_dim: int = 2, **kwargs):
         """
         Diagonal Gaussian distribution is a special case of the
@@ -96,28 +102,23 @@ class DiagonalGaussianSource(SourceDistribution):
             loc=self.mu, covariance_matrix=torch.diag(self.sigma)
         )
 
-    def sample(self, nsamples: int | tuple) -> Tensor:
-        return self.dist.sample((nsamples,))
 
-
-class GaussianSource(SourceDistribution):
+class GaussianSource(CoupledSourceDistribution):
     def __init__(self, mu: Tensor, Sigma: Tensor, data_dim: int = 2, **kwargs):
         """Gaussian distribution with mean=mu and covariance matrix=Sigma.
         In contrast to the DiagonalGaussianSource, this distribution allows for correlations between dimensions.
         mu: Tensor of shape (d,) where d is the dimensionality of the distribution.
         Sigma: Tensor of shape (d, d), the covariance matrix.
         """
-        self.mu = torch.as_tensor(mu)
-        self.Sigma = torch.as_tensor(Sigma)
-        assert Sigma.shape == (data_dim, data_dim), f"Sigma has wrong shape {Sigma.shape}"
+        mu = torch.as_tensor(mu)
+        Sigma = torch.as_tensor(Sigma)
+        assert Sigma.shape == (data_dim, data_dim), \
+            f"Sigma has wrong shape {Sigma.shape}"
         self.data_dim = data_dim
-        self.dist = torch.distributions.MultivariateNormal(self.mu, self.Sigma)
-    
-    def sample(self, nsamples: int | tuple) -> Tensor:
-        return self.dist.sample((nsamples,))
+        self.dist = torch.distributions.MultivariateNormal(mu, Sigma)
 
 
-class MixtureOfGaussians(SourceDistribution):
+class MixtureOfGaussians(CoupledSourceDistribution):
     """
     # Define your mixture of Gaussians (K components)
     mus = [torch.tensor([0.0, 0.0]), torch.tensor([5.0, 5.0])]  # Means for each component
@@ -127,11 +128,12 @@ class MixtureOfGaussians(SourceDistribution):
 
     def __init__(self, mus: Tensor, sigmas: Tensor, pis: Tensor, data_dim: int = 2, **kwargs):
         # means (components x dimensions)
-        self.mus = torch.as_tensor(mus)
+        mus = torch.as_tensor(mus)
         # std deviations (components x dimensions)
-        self.sigmas = torch.as_tensor(sigmas)
+        sigmas = torch.as_tensor(sigmas)
         # mixture weights (components)
-        self.mix = torch.distributions.Categorical(pis)
+        pis = torch.as_tensor(pis)
+        mix = torch.distributions.Categorical(pis)
         self.K = len(mus)  # Number of components
         self.data_dim = data_dim
         assert mus.shape == (self.K, data_dim), f"mus has wrong shape {mus.shape}"
@@ -139,13 +141,10 @@ class MixtureOfGaussians(SourceDistribution):
         assert pis.shape == (self.K,), f"pis has wrong shape {pis.shape}"
         assert all(0 <= pi <= 1 for pi in pis), "all pis must be between 0 and 1"
         assert sum(pis) == 1, "pis must sum to 1"
-        self.comp = torch.distributions.Independent(
+        comp = torch.distributions.Independent(
             torch.distributions.Normal(mus, sigmas), 1
         )
-        self.dist = torch.distributions.MixtureSameFamily(self.mix, self.comp)  
-    
-    def sample(self, nsamples: Tuple[int]):
-        return self.dist.sample((nsamples, ))
+        self.dist = torch.distributions.MixtureSameFamily(mix, comp)  
 
 
 class BetaSource(SourceDistribution):
@@ -176,18 +175,15 @@ class Chi2Source(SourceDistribution):
         self.dist = torch.distributions.Chi2(df)
 
 
-class DirichletSource(SourceDistribution):
+class DirichletSource(CoupledSourceDistribution):
     def __init__(self, concentration: Tensor, data_dim: int = 2, **kwargs):
         """Dirichlet distribution is a multivariate generalization of the Beta distribution.
         Meaning the dimensions are correlated.
         """
         self.data_dim = data_dim
-        self.concentration = torch.as_tensor(concentration)
+        concentration = torch.as_tensor(concentration)
         assert concentration.shape == (data_dim,), f"Concentration has wrong shape {concentration.shape}"
-        self.dist = torch.distributions.Dirichlet(self.concentration)
-
-    def sample(self, nsamples: int | tuple) -> Tensor:
-        return self.dist.sample((nsamples, ))
+        self.dist = torch.distributions.Dirichlet(concentration)
 
 
 class ExponentialSource(SourceDistribution):
@@ -271,7 +267,7 @@ class LogNormalSource(SourceDistribution):
         self.dist = torch.distributions.LogNormal(loc, scale)
 
 
-class LowRankMultivariateNormalSource(SourceDistribution):
+class LowRankMultivariateNormalSource(CoupledSourceDistribution):
     def __init__(self, loc: Tensor, cov_factor: Tensor, cov_diag: Tensor, data_dim: int = 2, **kwargs):
         """Describes the distribution of a multivariate Gaussian with a low-rank covariance matrix.
         For example, in the context of neural networks, the distribution of the weights.
@@ -282,23 +278,17 @@ class LowRankMultivariateNormalSource(SourceDistribution):
         self.cov_diag = torch.as_tensor(cov_diag)   
         self.dist = torch.distributions.LowRankMultivariateNormal(self.loc, self.cov_factor, self.cov_diag)
 
-    def sample(self, nsamples: int | tuple) -> Tensor:
-        return self.dist.sample((nsamples, ))
 
-
-class MultivariateNormalSource(SourceDistribution):
+class MultivariateNormalSource(CoupledSourceDistribution):
     def __init__(self, loc: Tensor, covariance_matrix: Tensor, data_dim: int = 2, **kwargs):
         """Multivariate = multiple dimensions, normal = Gaussian distribution.
         Covariance matrix describes the relationship between the dimensions.
         """
         self.data_dim = data_dim
         self.loc = torch.as_tensor(loc)
-        self.covariance_matrix = torch.as_tensor(covariance_matrix)
+        covariance_matrix = torch.as_tensor(covariance_matrix)
         assert covariance_matrix.shape == (data_dim, data_dim), f"Covariance matrix has wrong shape {covariance_matrix.shape}"
-        self.dist = torch.distributions.MultivariateNormal(self.loc, self.covariance_matrix)
-
-    def sample(self, nsamples: int | tuple) -> Tensor:
-        return self.dist.sample((nsamples, ))
+        self.dist = torch.distributions.MultivariateNormal(self.loc, covariance_matrix)
 
 
 class NormalSource(SourceDistribution):
@@ -317,15 +307,17 @@ class ParetoSource(SourceDistribution):
 
 
 class RelaxedBernoulliSource(SourceDistribution):
-    def __init__(self, logits: Tensor, temperature: float, data_dim: int = 2, **kwargs):
+    def __init__(self, logits: Tensor, temperature: Tensor, data_dim: int = 2, **kwargs):
         """RelaxedBernoulli distribution is a continuous relaxation of the Bernoulli distribution,
         relaxing the discrete Bernoulli distribution to a continuous distribution.
         Temperature controls the degree of relaxation."""
         self.data_dim = data_dim
         self.logits = torch.as_tensor(logits)
-        assert self.logits.shape == (data_dim,), f"Logits have wrong shape {logits.shape}"
+        self.temperature = torch.as_tensor(temperature)
+        assert self.logits.shape == (data_dim,), f"Logits have wrong shape {self.logits.shape}"
+        # assert self.temperature.shape == (data_dim,), f"Temperature has wrong shape {self.temperature.shape}"
         self.dist = torch.distributions.RelaxedBernoulli(
-            temperature, logits=self.logits
+            temperature=self.temperature, logits=self.logits
         )
 
     def sample(self, nsamples: int | tuple) -> Tensor:
@@ -337,7 +329,6 @@ class StudentTSource(SourceDistribution):
         """Describes the distribution of the difference between two independent Gaussian random variables."""
         self.data_dim = data_dim
         self.dist = torch.distributions.StudentT(df, loc, scale)
-
 
 
 class VonMisesSource(SourceDistribution):
