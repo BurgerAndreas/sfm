@@ -17,7 +17,7 @@ from typing import *
 from zuko.utils import odeint
 
 from sfm.loggingwrapper import get_logger
-from sfm.flowmodel import CNF, FlowMatchingLoss
+from sfm.flowmodel import CNF, TargetConditionalFlowMatchingLoss
 
 """
 In score-based generative modeling, it is standard to set t=0 as the data (noiseless) extremity and t=1 as the noise extremity. 
@@ -43,29 +43,29 @@ class Trainer:
         self.cfg = cfg
         self.cfg = self.init_logging(cfg)
 
-        self.flow = CNF(cfg["datadim"], hidden_features=[64] * 3, source=cfg["source"])
+        self.flow = CNF(cfg['datadim'], hidden_features=[64] * 3, source=cfg['source'])
         self.data: torch.Tensor = get_dataset(
             # 20% extra for validation set
-            int(cfg["n_samples"] * 1.2),
-            cfg["dataset"],
-            cfg["datanoise"],
+            int(cfg['n_samples'] * 1.2),
+            cfg['dataset'],
+            cfg['datanoise'],
         )
-        self.data_train = self.data[: cfg["n_samples"]]
-        self.data_val = self.data[cfg["n_samples"] :]
+        self.data_train = self.data[: cfg['n_samples']]
+        self.data_val = self.data[cfg['n_samples'] :]
 
         self.step = 0
 
     def train(self) -> List[float]:
         # Training
-        loss_fn = FlowMatchingLoss(self.flow)
-        optimizer = torch.optim.Adam(self.flow.parameters(), lr=self.cfg["optim"]["lr"])
+        loss_fn = TargetConditionalFlowMatchingLoss(self.flow)
+        optimizer = torch.optim.Adam(self.flow.parameters(), lr=self.cfg['optim']['lr'])
 
         # Training loop for flow matching
         losses = []
         log_probs = []
-        for trainstep in tqdm(range(self.cfg["n_trainsteps"]), ncols=88):
+        for trainstep in tqdm(range(self.cfg['n_trainsteps']), ncols=88):
             # Randomly select a batch of data
-            subset = torch.randint(0, len(self.data_train), (self.cfg["batch_size"],))
+            subset = torch.randint(0, len(self.data_train), (self.cfg['batch_size'],))
             x = self.data_train[subset]
 
             loss = loss_fn(x)
@@ -74,10 +74,10 @@ class Trainer:
             optimizer.step()
             losses.append(loss.item())
 
-            if trainstep % self.cfg["logfreq"] == 0:
+            if trainstep % self.cfg['logfreq'] == 0:
                 self.logger.log({"loss": loss.item()}, step=self.step, split="train")
 
-            if trainstep % self.cfg["evalfreq"] == 0:
+            if trainstep % self.cfg['evalfreq'] == 0:
                 gensamples, log_p = self.evaluate()
                 self.logger.log({"log_p": log_p.mean()}, step=self.step, split="val")
                 log_probs.append(log_p.mean())
@@ -87,15 +87,17 @@ class Trainer:
 
         return losses
 
-    def evaluate(self) -> Tuple[Tensor, Tensor]:
+    def evaluate(self, eval_samples: int = None) -> Tuple[Tensor, Tensor]:
         # Generate samples from the flow
         with torch.no_grad():
-            z = self.flow.source.sample(self.cfg["n_samples"])
-            x = self.flow.decode(z)
+            z = self.flow.source.sample(eval_samples or self.cfg['n_samples'])
+            x = self.flow.decode(z) # [B, D]
 
         # Log-likelihood of true unseen data under the flow
         with torch.no_grad():
-            log_p = self.flow.log_prob(self.data_val[: self.cfg["batch_size"]])
+            log_p = self.flow.log_prob(
+                self.data_val[: self.cfg['batch_size']] # [B, D]
+            ) 
 
         return x, log_p
 
@@ -104,7 +106,7 @@ class Trainer:
         # Create a directory for logging
         logdir = f"logs/{cfg['dataset']}_{cfg['source']['type']}"
         os.makedirs(logdir, exist_ok=True)
-        cfg["logdir"] = logdir
+        cfg['logdir'] = logdir
         return cfg
 
     def finalize(self):
@@ -115,14 +117,14 @@ def plot_data(x, cfg, step: int, folder: str = None, fname: str = None):
     if isinstance(x, torch.Tensor):
         x = x.cpu().numpy()
 
-    assert x.shape[1] == cfg["datadim"], f"Expected (...,{cfg['datadim']}) dimensions, got {x.shape}"
+    assert x.shape[1] == cfg['datadim'], f"Expected (...,{cfg['datadim']}) dimensions, got {x.shape}"
 
     plt.figure(figsize=(4.8, 4.8), dpi=150)
     plt.hist2d(*x.T, bins=64)
     if fname is None:
         fname = f"{cfg['dataset']}_{cfg['source']['type']}_s{step}.png"
     if folder is None:
-        folder = cfg["logdir"]
+        folder = cfg['logdir']
     fname = folder + "/" + fname
     plt.savefig(fname)
     print(f"Saved data plot to\n {fname}")
@@ -136,7 +138,7 @@ def plot_loss(losses, cfg, folder: str = None, fname: str = None):
     if fname is None:
         fname = f"{cfg['dataset']}_{cfg['source']['type']}_loss.png"
     if folder is None:
-        folder = cfg["logdir"]
+        folder = cfg['logdir']
     fname = folder + "/" + fname
     plt.savefig(fname)
     print(f"Saved loss plot to\n {fname}")

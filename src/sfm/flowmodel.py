@@ -94,6 +94,7 @@ class CNF(nn.Module):
         if self.source.log_prob(torch.tensor(1.0)) is None:
             # Source distribution does not have a log-probability function
             return None
+        # assert x.shape == self.source.log_prob(x).shape
 
         I = torch.eye(x.shape[-1], dtype=x.dtype, device=x.device)
         I = I.expand(*x.shape, x.shape[-1]).movedim(-1, 0)
@@ -135,7 +136,7 @@ class TargetConditionalFlowMatchingLoss(nn.Module):
     def __init__(self, v: nn.Module):
         """CFM loss based on Equation 23 in the flow matching paper 
         https://arxiv.org/pdf/2210.02747.pdf
-        
+
         ψ_t(x) = y: conditional flow
         u:          vector field
         v:          CNF vector field v
@@ -149,15 +150,11 @@ class TargetConditionalFlowMatchingLoss(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         """Optimal Transport conditional VF of a Gaussian.
+        x=x1: data
         OT for Gaussian:
         Mean and std change linearly with t:
         μt(x) = t*x1
         σt(x) = 1 - (1 - σmin)*t (20)
-        our convention of t=0 is the data and t=1 is the source,
-        i.e. t -> 1-t
-        μt(x) = (1-t)*x1 
-        σt(x) = 1 - (1 - σmin)*(1-t) = σmin + (1-σmin)*t
-        pt = [(1 - t)id + tψ]*p0
         """
         # Sample random time step from [0, 1]
         t = torch.rand_like(x[..., 0, None])
@@ -165,14 +162,9 @@ class TargetConditionalFlowMatchingLoss(nn.Module):
         z = self.v.source.sample(x.shape[0])  
 
         # Interpolation between data and source
-        # y = μt(x) + σt(x)*z
-        y = (1 - t) * x + (1e-4 + (1 - 1e-4) * t) * z
-        # This is the target vector field u in Eq. (21) and Eq. (23)
-        # ut(x|x1) = (x1 - (1-σmin)*x) / (1-(1-σmin)*(1-t))
-        # = (x1 - (1-σmin)*x) / (σmin + (1-σmin)*t)
-        u = (1 - 1e-4) * z - x  
-
-        # Flow Matching loss: match the vector field to the target field
-        # This minimizes the difference between v(t, y) and the target field u
-        # Based on Eq. (23) in the paper
-        return (self.v(t.squeeze(-1), y) - u).square().mean()
+        # psi = ψ = μt(x) + σt(x)*z = (1 − (1 − σmin)t)x + tx1
+        psi = (1 - (1 - 1e-4) * t) * z + (t * x)
+        # Target vector field u in Eq. (21) and Eq. (23)
+        # loss = ||vt(ψt(x0)) − x1 − (1 − σmin)x0||
+        u = x + (1 - 1e-4) * z  
+        return (self.v(t.squeeze(-1), psi) - u).square().mean()
