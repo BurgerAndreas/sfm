@@ -56,7 +56,12 @@ class StandardNormalSource(SourceDistribution):
         self.data_dim = data_dim
         self.dist = torch.distributions.Normal(0, 1)
 
-
+    def log_prob(self, x: Tensor) -> Tensor:
+        return self.dist.log_prob(x).sum(dim=-1)
+    
+    # should be the same as
+    # def log_normal(x: Tensor) -> Tensor:
+    #     return -(x.square() + math.log(2 * math.pi)).sum(dim=-1) / 2
 
 class IsotropicGaussianSource(SourceDistribution):
     def __init__(self, mu: Tensor = torch.tensor([0.0, 0.0]), sigma: float = 1.0, data_dim: int = 2, **kwargs):

@@ -28,7 +28,6 @@ class MLP(nn.Sequential):
 
         super().__init__(*layers[:-1])
 
-
 # Continuous Normalizing Flow (CNF) class
 # This class models the vector field v(t, x) that generates the probability path
 # Eq. (1) in the paper defines the vector field
@@ -90,6 +89,9 @@ class CNF(nn.Module):
         This computes the log-determinant Jacobian term as in Eq. (27)
 
         compute p1(x1) we first solve the ODE in equation 31 with initial conditions in equation 32, and the compute equation 33
+
+        x: [B, D]
+        return: [B]
         """
         if self.source.log_prob(torch.tensor(1.0)) is None:
             # Source distribution does not have a log-probability function
@@ -125,9 +127,8 @@ class CNF(nn.Module):
         # [B, D] -> [B, D], [B]
         z, ladj = odeint(f=augmented, x=(x, ladj), t0=0.0, t1=1.0, phi=self.parameters())
 
-        # Final log-probability calculation with adjusted trace
-        # Scale back by 1e2 as per the user comment
-        # return log_normal(z) + ladj * 1e2
+        # Final log-probability calculation with adjusted trace (scale back by 1e2)
+        # log_prob: [B,2] -> [B]
         return self.source.log_prob(z) + ladj * 1e2
 
 
