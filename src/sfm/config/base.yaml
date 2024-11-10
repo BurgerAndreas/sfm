@@ -40,7 +40,7 @@ force_cpu: false
 logger: null # neptune, wandb
 tags: null
 logfreq: 100
-evalfreq: 5000
+evalfreq: 3000
 
 wandb_run_name: fm
 # variables we can access in our code
