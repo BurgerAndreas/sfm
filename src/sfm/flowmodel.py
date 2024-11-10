@@ -76,9 +76,17 @@ class ContNormFlow(nn.Module):
         if fmtime:
             tdata = 1.0
             tnoise = 0.0
-        # register buffers to ensure they are moved to the correct device
+        # register buffers to ensure values are moved to the correct device
         self.register_buffer("tdata", torch.tensor(tdata))
         self.register_buffer("tnoise", torch.tensor(tnoise))
+    
+    def set_fmtime(self, fmtime: bool):
+        if fmtime:
+            self.tdata = 1.0
+            self.tnoise = 0.0
+        else:
+            self.tdata = 0.0
+            self.tnoise = 1.0
 
     def forward(self, t: Tensor, x: Tensor, y: Tensor = None) -> Tensor:
         # Forward pass through the MLP network to model the vector field
@@ -154,11 +162,30 @@ class ContNormFlow(nn.Module):
 
 
 class NeuralODEWrapper(NeuralODE):
-    def __init__(self, model, **kwargs):
+    def __init__(self, model, fmtime=True, **kwargs):
         # Without torchdyn_wrapper, the model is not compatible with torchdyn
         # Your vector field does not have `nn.Parameters` to optimize.
         super().__init__(torchdyn_wrapper(model), **kwargs)
         # super().__init__(model, return_t_eval=False, **kwargs)
+
+        # diffusion / Francois time convention
+        tnoise = 1.0
+        tdata = 0.0
+        # flow matching / TorchCFM time convention
+        if fmtime:
+            tdata = 1.0
+            tnoise = 0.0
+        # register buffers to ensure values are moved to the correct device
+        self.register_buffer("tdata", torch.tensor(tdata))
+        self.register_buffer("tnoise", torch.tensor(tnoise))
+    
+    def set_fmtime(self, fmtime: bool):
+        if fmtime:
+            self.tdata = 1.0
+            self.tnoise = 0.0
+        else:
+            self.tdata = 0.0
+            self.tnoise = 1.0
 
     def decode(self, sources: Tensor) -> Tensor:
         # [T, B, D]
@@ -254,11 +281,13 @@ class LipmanFMLoss(nn.Module):
         super().__init__()
         self.v = v
         self.sigma = sigma
+        self.fmtime = False # t=0 is data, t=1 is noise
 
     def forward(self, sources: Tensor, targets: Tensor) -> Tensor:
         """Optimal Transport conditional VF of a Gaussian.
-        sources=x0: source samples
-        targets=x1: data samples
+        Diffusion time convention: t=0 is data, t=1 is noise
+        sources=x1: source samples
+        targets=x0: data samples
         OT for Gaussian:
         Mean and std change linearly with t:
         μt(x) = t*x1
@@ -283,6 +312,7 @@ class LipmanTCFMLoss(nn.Module):
         self.v = v  # NeuralODE
         self.sigma = sigma
         self.fm = TargetConditionalFlowMatcher(sigma=sigma)
+        self.fmtime = True # t=1 is data, t=0 is noise
 
     def forward(self, sources: Tensor, targets: Tensor, labels: Tensor = None) -> Tensor:
         # sources=x0: source samples

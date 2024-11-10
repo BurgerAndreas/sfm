@@ -32,7 +32,7 @@ n_ode: zuko
 
 # if true, use flow matching time convention
 # t=0 is noise, t=1 is data
-fmtime: false
+fmtime: null # null means set automatically
 
 # computational
 force_cpu: false
@@ -40,7 +40,7 @@ force_cpu: false
 # logging
 logger: null # neptune, wandb
 tags: null
-logfreq: 5000
+logfreq: 100
 evalfreq: 5000
 
 wandb_run_name: fm

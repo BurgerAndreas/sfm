@@ -11,27 +11,27 @@ mamba activate sfm
 ```
 We use hydra to manage configs. To compare different flow matching losses:
 ```bash
-python scripts/run_flow_matching.py fmloss=lipman fmtime=false
-python scripts/run_flow_matching.py fmloss=lipmantcfm fmtime=true
+python scripts/run_flow_matching.py fmloss=lipman
+python scripts/run_flow_matching.py fmloss=lipmantcfm
 # these are the most interesting, since they work with arbitrary source distributions
-python scripts/run_flow_matching.py fmloss=cfm fmtime=true
-python scripts/run_flow_matching.py fmloss=otcfm fmtime=true
+python scripts/run_flow_matching.py fmloss=cfm
+python scripts/run_flow_matching.py fmloss=otcfm
 ```
 
 To plot trajectories
 ```bash
-python scripts/run_flow_matching.py fmloss=cfm fmtime=true n_ode=torchdyn
+python scripts/run_flow_matching.py fmloss=cfm n_ode=torchdyn
 ```
 
 Try different source distributions:
 ```bash
-python scripts/run_flow_matching.py fmloss=cfm fmtime=true source=normal logger=neptune
+python scripts/run_flow_matching.py fmloss=cfm source=normal logger=neptune
 
 sources=("normal" "beta" "laplace" "mog")
 losses=("cfm" "otcfm")
 for source in "${sources[@]}"; do
     for loss in "${losses[@]}"; do
-        python scripts/run_flow_matching.py fmloss=${loss} fmtime=true source=${source} logger=neptune
+        python scripts/run_flow_matching.py fmloss=${loss} source=${source} logger=neptune
     done
 done
 ```

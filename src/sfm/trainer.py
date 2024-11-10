@@ -116,6 +116,10 @@ class Trainer:
             loss_fn = OTCFMLoss(self.flow).to(self.device)
         else:
             raise ValueError(f"Unknown loss function: {self.cfg['fmloss']}")
+        # loss function determines the time convention
+        if self.cfg["fmtime"] is None:
+            self.cfg["fmtime"] = loss_fn.fmtime
+            self.flow.set_fmtime(self.cfg["fmtime"])
 
         optimizer = torch.optim.Adam(self.flow.parameters(), lr=self.cfg["optim"]["lr"])
         lr_schedule = get_lr_schedule(optimizer, self.cfg)
@@ -138,18 +142,19 @@ class Trainer:
             lr_schedule.step()
             losses.append(loss.item())
 
-            if (trainstep + 1) % self.cfg["logfreq"] == 0:
+            if trainstep % self.cfg["logfreq"] == 0:
                 self.logger.log(
                     {"loss": loss.item(), "lr": optimizer.param_groups[0]["lr"]}, step=self.step, split="train"
                 )
 
-            if (trainstep + 1) % self.cfg["evalfreq"] == 0:
+            if trainstep % self.cfg["evalfreq"] == 0:
                 gensamples, log_p = self.evaluate()
                 # log_p tends to be contain NaNs if sample is outside of support of source distribution
                 log_p = torch.nanmean(log_p)
                 self.logger.log({"log_p": log_p}, step=self.step, split="val")
                 log_probs.append(log_p.item())
-                fname = self.plot_data(x=gensamples, step=self.step)
+                fname, fig = self.plot_data(x=gensamples, step=self.step)
+                self.logger.log_img(fig, key="gen", step=self.step, split="val")
                 tqdm.write(f"Saved data plot to\n {fname}")
 
             self.step += 1
@@ -172,13 +177,18 @@ class Trainer:
         return gen_targets, log_p
 
     def init_logging(self, cfg: Dict):
-        self.logger = get_logger(cfg)
-        # Create a directory for logging
+        # logging to file
         logdir = f"logs/{self.fnamebase}"
         os.makedirs(logdir, exist_ok=True)
         cfg["logdir"] = logdir
+        # logging to cloud service
+        self.logger = get_logger(cfg)
+        self.logger.logdir = logdir
         self.logdir = logdir
         return cfg
+    
+    def savetofile(self, data, fname: str):
+        torch.save(data, f"{self.logdir}/{fname}.pt")
 
     def finalize(self):
         self.logger.stop()
@@ -189,17 +199,18 @@ class Trainer:
 
         assert x.shape[1] == self.cfg["datadim"], f"Expected (...,{self.cfg['datadim']}) dimensions, got {x.shape}"
 
-        plt.figure(figsize=(4.8, 4.8), dpi=150)
+        fig = plt.figure(figsize=(4.8, 4.8), dpi=150)
         plt.hist2d(*x.T, bins=64)
         fname += f"_s{step}.png"
         if folder is None:
             folder = self.logdir
         fname = folder + "/" + fname
-        plt.savefig(fname)
-        return fname
+        # plt.savefig() would close the figure
+        fig.savefig(fname) 
+        return fname, fig
 
     def plot_loss(self, losses, folder: str = None, fname: str = ""):
-        plt.figure(figsize=(4.8, 4.8), dpi=150)
+        fig = plt.figure(figsize=(4.8, 4.8), dpi=150)
         plt.plot(losses)
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
@@ -207,5 +218,6 @@ class Trainer:
         if folder is None:
             folder = self.logdir
         fname = folder + "/" + fname
-        plt.savefig(fname)
-        return fname
+        # plt.savefig() would close the figure
+        fig.savefig(fname)
+        return fname, fig

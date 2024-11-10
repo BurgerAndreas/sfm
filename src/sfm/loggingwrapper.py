@@ -68,7 +68,6 @@ class NeptuneWrapper(LoggingWrapper):
         self.run["parameters"] = args_dict
 
     def log_safely(self, metrics: dict, step: int, split: str):
-        # V1
         for key, value in metrics.items():
             if "log_p" in key:
                 print(f"=== log_p: {value}", type(value))
@@ -92,10 +91,13 @@ class NeptuneWrapper(LoggingWrapper):
             self.run[split + "/" + key].append(value, step=step)
 
     def log(self, metrics: dict, step: int, split: str):
-        self.run["split"].append(metrics, step=step)
+        self.run[split].append(metrics, step=step)
 
-    def log_img(self, img, step, split):
-        self.run["split"].log(neptune.types.File.as_image(img), step=step)
+    def log_img(self, img, key, step, split, name=None, description=None):
+        # self.run[split].log(neptune.types.File.as_image(img), step=step)
+        # self.run[split + "/" + key].upload(img)
+        # name=name, description=description
+        self.run[split + "/" + key].append(img, step=step, name=name, description=description) 
 
     def stop(self):
         self.run.stop()

@@ -22,18 +22,24 @@ def run_with_hydra(args: DictConfig) -> None:
     # Final evaluation
     gensamples, log_p = trainer.evaluate()
     trainer.logger.log({"log_p": log_p.nanmean()}, step=trainer.step, split="val")
+    log_probs.append(log_p.nanmean().item())
+
+    # save log_probs and losses to file
+    trainer.savetofile(log_probs, "logprobs")
+    trainer.savetofile(losses, "losses")
 
     # Plot the generated samples and the loss
-    trainer.plot_data(x=gensamples, step=trainer.step)
-    fname = trainer.plot_loss(losses=losses)
+    fname, fig = trainer.plot_data(x=gensamples, step=trainer.step)
+    print(f"Saved data plot to\n {fname}")
+    fname, fig = trainer.plot_loss(losses=losses)
     print(f"Saved loss plot to\n {fname}")
-    fname = trainer.plot_loss(losses=log_probs, fname="logprobs")
+    fname, fig = trainer.plot_loss(losses=log_probs, fname="logprobs")
     print(f"Saved logprobs plot to\n {fname}")
 
     # Plot the training and validation distributions
-    fname = trainer.plot_data(x=trainer.data_train, step=0, folder="plots/data", fname=f"{cfg['dataset']}_train.png")
+    fname, fig = trainer.plot_data(x=trainer.data_train, step=0, folder="plots/data", fname=f"{cfg['dataset']}_train.png")
     print(f"Saved training data plot to\n {fname}")
-    fname = trainer.plot_data(x=trainer.data_val, step=0, folder="plots/data", fname=f"{cfg['dataset']}_val.png")
+    fname, fig = trainer.plot_data(x=trainer.data_val, step=0, folder="plots/data", fname=f"{cfg['dataset']}_val.png")
     print(f"Saved validation data plot to\n {fname}")
 
     print(
