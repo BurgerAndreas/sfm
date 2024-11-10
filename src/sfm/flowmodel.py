@@ -76,9 +76,9 @@ class ContNormFlow(nn.Module):
 
         self.net = model
 
-    def forward(self, t: Tensor, x: Tensor) -> Tensor:
+    def forward(self, t: Tensor, x: Tensor, y: Tensor = None) -> Tensor:
         # Forward pass through the MLP network to model the vector field
-        return self.net(t, x)
+        return self.net(t=t, x=x, y=y)
 
     # Encode (from data to noise)
     # Uses the ODE solving strategy described in Eq. (1)
@@ -155,7 +155,7 @@ class ContNormFlow(nn.Module):
         # I use the odeint function provided by Zuko to do so.
         # It implements the adaptive checkpoint adjoint (ACA) method which allows for more accurate back-propagation than the standard adjoint method implemented by torchdiffeq.
         # [B, D] -> [B, D], [B]
-        z, ladj = odeint(f=augmented, x=(targets, ladj), t0=0.0, t1=1.0, phi=self.parameters())
+        z, ladj = odeint(f=augmented, x=(targets, ladj), t0=0., t1=1., phi=self.parameters())
 
         # Final log-probability calculation with adjusted trace (scale back by 1e2)
         # log_prob: [B,2] -> [B]
@@ -266,11 +266,11 @@ class LipmanFMLoss(nn.Module):
         t = torch.rand_like(targets[..., 0, None]) 
 
         # Interpolation between data and noise
-        # psi = ψ = μt(x) + σt(x)*x0 = (1 − (1 − σmin)t)x0 + tx1
-        psi = (1 - (1 - self.sigma) * t) * sources + (t * targets)
+        # psi = ψ = μt(x) + σt(x)*x0 
+        psi = (1 - t) * targets + (self.sigma + (1 - self.sigma) * t) * sources
         # Target vector field u in Eq. (21) and Eq. (23)
         # loss = ||vt(ψt(x0)) − x1 − (1 − σmin)x0||
-        u = targets + (1 - self.sigma) * sources  
+        u = (1 - self.sigma) * sources - targets
         return (self.v(t.squeeze(-1), psi) - u).square().mean()
 
 class LipmanTCFMLoss(nn.Module):
@@ -290,7 +290,7 @@ class LipmanTCFMLoss(nn.Module):
         
         # [B, D+1] -> [B, D]
         # vt = model(torch.cat([xt, t[:, None]], dim=-1))
-        vt = self.v(t, xt, y=labels)
+        vt = self.v(t=t, x=xt, y=labels)
 
         return torch.mean((vt - ut) ** 2)
         

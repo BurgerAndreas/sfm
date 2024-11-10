@@ -92,9 +92,11 @@ class Trainer:
         # Training
         if self.cfg['fmloss'] == 'lipman':
             loss_fn = LipmanFMLoss(self.flow)
-        elif self.cfg['fmloss'] == 'tong':
+        elif self.cfg['fmloss'] == 'lipmantcfm':
+            loss_fn = LipmanTCFMLoss(self.flow)
+        elif self.cfg['fmloss'] == 'cfm':
             loss_fn = CFMLoss(self.flow)
-        elif self.cfg['fmloss'] == 'ot':
+        elif self.cfg['fmloss'] == 'otcfm':
             loss_fn = OTCFMLoss(self.flow)
         optimizer = torch.optim.Adam(self.flow.parameters(), lr=self.cfg['optim']['lr'])
         lr_schedule = get_lr_schedule(optimizer, self.cfg)
@@ -102,7 +104,7 @@ class Trainer:
         # Training loop for flow matching
         losses = []
         log_probs = []
-        for trainstep in tqdm(range(self.cfg['n_trainsteps']), ncols=88):
+        for trainstep in tqdm(range(self.cfg['n_trainsteps']), ncols=44):
             # Randomly select a batch of data = samples from the data distribution
             subset = torch.randint(0, len(self.data_train), (self.cfg['batch_size'],))
             targets = self.data_train[subset]

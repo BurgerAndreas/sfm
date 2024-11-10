@@ -3,6 +3,7 @@ plots/*
 logs/*
 outputs/*
 
+*.pdf
 **/*.png
 
 **/.DS_Store

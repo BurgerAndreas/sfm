@@ -15,6 +15,14 @@ from zuko.utils import odeint
 def log_normal(x: Tensor) -> Tensor:
     return -(x.square() + math.log(2 * math.pi)).sum(dim=-1) / 2
 
+tnoise = 1.
+tdata = 0.
+
+reverse_time = False
+reverse_fm = False
+
+if reverse_time:
+    tdata, tnoise = tnoise, tdata
 
 class MLP(nn.Sequential):
     def __init__(
@@ -50,10 +58,10 @@ class ContNormFlow(nn.Module):
         return self.net(torch.cat((t, x), dim=-1))
 
     def encode(self, x: Tensor) -> Tensor:
-        return odeint(self, x, 0.0, 1.0, phi=self.parameters())
+        return odeint(self, x, tdata, tnoise, phi=self.parameters())
 
     def decode(self, z: Tensor) -> Tensor:
-        return odeint(self, z, 1.0, 0.0, phi=self.parameters())
+        return odeint(self, z, tnoise, tdata, phi=self.parameters())
 
     def log_prob(self, x: Tensor) -> Tensor:
         I = torch.eye(x.shape[-1], dtype=x.dtype, device=x.device)
@@ -70,7 +78,7 @@ class ContNormFlow(nn.Module):
             return dx, trace * 1e-2
 
         ladj = torch.zeros_like(x[..., 0])
-        z, ladj = odeint(augmented, (x, ladj), 0.0, 1.0, phi=self.parameters())
+        z, ladj = odeint(augmented, (x, ladj), tdata, tnoise, phi=self.parameters())
 
         # log_normal: [B,2] -> [B]
         return log_normal(z) + ladj * 1e2
@@ -85,8 +93,14 @@ class FlowMatchingLoss(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         t = torch.rand_like(x[..., 0, None])
         z = torch.randn_like(x)
+        
+        # t = (1 - t) # if reverse_time else t
         y = (1 - t) * x + (1e-4 + (1 - 1e-4) * t) * z
         u = (1 - 1e-4) * z - x
+        
+        if reverse_fm:
+            y = (1 - (1 - 1e-4) * t) * z + (t * x)
+            u = (1 - 1e-4) * z - x
 
         return (self.v(t.squeeze(-1), y) - u).square().mean()
 
@@ -107,7 +121,6 @@ if __name__ == '__main__':
     with torch.no_grad():
         log_p = flow.log_prob(data[:batch_size])
         print(f"Log probability: {log_p.mean():.3f} ± {log_p.std():.3f}")
-
 
     # Training
     for epoch in tqdm(range(16384), ncols=44):
@@ -130,6 +143,7 @@ if __name__ == '__main__':
     plt.figure(figsize=(4.8, 4.8), dpi=150)
     plt.hist2d(*x.T, bins=64)
     plt.savefig('moons_fm.pdf')
+    print("Saved figure to moons_fm.pdf")
 
     # Log-likelihood
     with torch.no_grad():

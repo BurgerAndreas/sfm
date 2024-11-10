@@ -30,7 +30,7 @@ def run_with_hydra(args: DictConfig) -> None:
     plot_data(x=trainer.data_train, cfg=cfg, step=0, folder="plots/data", fname=f"{cfg['dataset']}_train.png")
     plot_data(x=trainer.data_val, cfg=cfg, step=0, folder="plots/data", fname=f"{cfg['dataset']}_val.png")
 
-    print(f"Log probability: {log_p.mean():.3f} ± {log_p.std():.3f}")
+    print(f"Log probability: {log_p.mean():.2f} ± {log_p.std():.2f} (default: -0.5 ± 0.7)")
     print(f"Loss after {cfg['n_samples']} n_samples: {losses[-1]:.3f}")
 
     trainer.finalize()
