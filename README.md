@@ -31,7 +31,7 @@ sources=("normal" "beta" "laplace" "mog" "cauchy" "fisher" "studentt" "weibull" 
 losses=("cfm" "otcfm")
 for source in "${sources[@]}"; do
     for loss in "${losses[@]}"; do
-        python scripts/run_flow_matching.py fmloss=${loss} source=${source} logger=neptune tags=["sweep1"]
+        python scripts/run_flow_matching.py fmloss=${loss} source=${source} logger=neptune tags=["s1"]
     done
 done
 ```

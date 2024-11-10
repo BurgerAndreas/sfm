@@ -47,12 +47,13 @@ class WandbWrapper(LoggingWrapper):
 
 class NeptuneWrapper(LoggingWrapper):
     def __init__(self, args, runname):
+        args_dict = OmegaConf.to_container(args, resolve=True)
         self.run = neptune.init_run(
             project="burgerandreas/fm-source",
             name=runname,
             capture_stderr=True,
             capture_stdout=True,
-            tags=args.tags,
+            tags=args_dict["tags"],
             # description="First BERT run for NLP project",
             # mode="async",
             # tags=["huggingface", "test", "BERT"],
@@ -62,7 +63,6 @@ class NeptuneWrapper(LoggingWrapper):
             # # with_id="CLS-123", # resume a run
         )
         # args to dict
-        args_dict = OmegaConf.to_container(args, resolve=True)
         # stringify_unsupported() to convert values of unsupported types to strings
         args_dict = neptune.utils.stringify_unsupported(args_dict)
         self.run["parameters"] = args_dict
