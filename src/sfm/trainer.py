@@ -75,7 +75,8 @@ class Trainer:
     def __init__(self, cfg: Dict):
         self.cfg = cfg
         self.cfg = self.init_logging(cfg)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() and not cfg["force_cpu"] else "cpu")
+        torch.set_default_device(self.device)
         
         model = MLPwithTimeEmbedding(**cfg["model"], device=self.device).to(self.device)
         if cfg["n_ode"] == "zuko":
@@ -87,8 +88,9 @@ class Trainer:
         else:
             raise ValueError(f"Unknown neural ode type: {cfg['n_ode']}")
 
-        self.sourcedist = get_source_distribution(**cfg["source"])
+        self.sourcedist = get_source_distribution(**cfg["source"], device=self.device)
 
+        # currently all on cpu
         self.data: torch.Tensor = get_dataset(
             # 20% extra for validation set
             int(cfg["n_samples"] * 1.2),
@@ -121,7 +123,7 @@ class Trainer:
         log_probs = []
         for trainstep in tqdm(range(self.cfg["n_trainsteps"]), ncols=44):
             # Randomly select a batch of data = samples from the data distribution
-            subset = torch.randint(0, len(self.data_train), (self.cfg["batch_size"],))
+            subset = torch.randint(0, len(self.data_train), (self.cfg["batch_size"],), device=self.data_train.device)
             targets = self.data_train[subset].to(self.device)
             # sample from the source distribution
             sources = self.sourcedist.sample(self.cfg["batch_size"]).to(self.device)
@@ -158,7 +160,7 @@ class Trainer:
         # Log-likelihood of true unseen data under the flow
         with torch.no_grad():
             log_p = self.flow.log_prob(
-                targets=self.data_val[: self.cfg["batch_size"]],  # [B, D]
+                targets=self.data_val[: self.cfg["batch_size"]].to(self.device),  # [B, D]
                 sourcedist=self.sourcedist,
             )
 
@@ -167,7 +169,7 @@ class Trainer:
     def init_logging(self, cfg: Dict):
         self.logger = get_logger(cfg)
         # Create a directory for logging
-        logdir = f"logs/{cfg['dataset']}_{cfg['source']['type']}"
+        logdir = f"logs/{cfg['dataset']}_{cfg['source']['type']}_{cfg['fmloss']}_{cfg['n_ode']}"
         os.makedirs(logdir, exist_ok=True)
         cfg["logdir"] = logdir
         return cfg

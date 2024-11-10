@@ -23,6 +23,19 @@ To plot trajectories
 python scripts/run_flow_matching.py fmloss=cfm fmtime=true n_ode=torchdyn
 ```
 
+Try different source distributions:
+```bash
+python scripts/run_flow_matching.py fmloss=cfm fmtime=true source=normal logger=neptune
+
+sources=("normal" "beta" "laplace" "mog")
+losses=("cfm" "otcfm")
+for source in "${sources[@]}"; do
+    for loss in "${losses[@]}"; do
+        python scripts/run_flow_matching.py fmloss=${loss} fmtime=true source=${source} logger=neptune
+    done
+done
+```
+
 ## Installation
 
 ```bash

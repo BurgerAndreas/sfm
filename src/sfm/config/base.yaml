@@ -34,6 +34,9 @@ n_ode: zuko
 # t=0 is noise, t=1 is data
 fmtime: false
 
+# computational
+force_cpu: false
+
 # logging
 logger: null # neptune, wandb
 tags: null

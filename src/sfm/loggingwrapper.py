@@ -46,7 +46,7 @@ class WandbWrapper(LoggingWrapper):
 
 class NeptuneWrapper(LoggingWrapper):
     def __init__(self, args, runname):
-        self.run = neptune.init(
+        self.run = neptune.init_run(
             project="burgerandreas/fm-source",
             name=runname,
             capture_stderr=True,

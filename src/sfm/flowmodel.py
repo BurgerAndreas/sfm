@@ -5,7 +5,7 @@ import torch.nn as nn
 import sklearn
 from torch import Tensor
 from typing import *
-from zuko.utils import odeint
+from zuko.utils import odeint as zuko_odeint
 from torchdyn.core import NeuralODE
 
 from torchcfm.conditional_flow_matching import (
@@ -19,10 +19,10 @@ from torchcfm.conditional_flow_matching import (
 class MLPwithTimeEmbedding(nn.Sequential):
     def __init__(
         self,
-        in_features: int,
-        out_features: int,
+        in_features: int = 2,
+        out_features: int = 2,
         freqs: int = 3,
-        hidden_features: List[int] = [64, 64],
+        hidden_features: List[int] = [64, 64, 64],
         time_varying: bool = True,
         device: str = "cpu",
     ):
@@ -45,7 +45,7 @@ class MLPwithTimeEmbedding(nn.Sequential):
     def forward(self, t: Tensor, x: Tensor = None, *args, **kwargs) -> Tensor:
         # Encode time with sinusoidal features to capture periodicity
         # t: [B] -> [B, 1]
-        t = self.freqs * t[..., None]  # [B, f]
+        t = self.freqs * t[..., None].to(self.freqs.device)  # [B, f]
         t = torch.cat((t.cos(), t.sin()), dim=-1)  # [B, 2f]
         t = t.expand(*x.shape[:-1], -1)  # [B, 2f]
         x = torch.cat((t, x), dim=-1)  # [B, D+2f]
@@ -70,12 +70,15 @@ class ContNormFlow(nn.Module):
         super().__init__()
         self.net = model
         # diffusion / Francois time convention
-        self.tnoise = 1.0
-        self.tdata = 0.0
+        tnoise = 1.0
+        tdata = 0.0
         # flow matching / TorchCFM time convention
         if fmtime:
-            self.tdata = 1.0
-            self.tnoise = 0.0
+            tdata = 1.0
+            tnoise = 0.0
+        # register buffers to ensure they are moved to the correct device
+        self.register_buffer("tdata", torch.tensor(tdata))
+        self.register_buffer("tnoise", torch.tensor(tnoise))
 
     def forward(self, t: Tensor, x: Tensor, y: Tensor = None) -> Tensor:
         # Forward pass through the MLP network to model the vector field
@@ -83,7 +86,7 @@ class ContNormFlow(nn.Module):
 
     # Encode (from data to noise)
     def encode(self, x: Tensor) -> Tensor:
-        return odeint(f=self, x=x, t0=self.tdata, t1=self.tnoise, phi=self.parameters())
+        return zuko_odeint(f=self, x=x, t0=self.tdata, t1=self.tnoise, phi=self.parameters())
 
     def decode(self, sources: Tensor) -> Tensor:
         """Go from noise to data.
@@ -94,7 +97,7 @@ class ContNormFlow(nn.Module):
         Returns:
             Tensor: generated sample [B, D]
         """
-        return odeint(f=self, x=sources, t0=self.tnoise, t1=self.tdata, phi=self.parameters())
+        return zuko_odeint(f=self, x=sources, t0=self.tnoise, t1=self.tdata, phi=self.parameters())
 
     def log_prob(self, targets: Tensor, sourcedist) -> Tensor:
         """
@@ -111,7 +114,7 @@ class ContNormFlow(nn.Module):
         targets=x1: [B, D]
         return: [B]
         """
-        if sourcedist.log_prob(torch.tensor(1.0)) is None:
+        if not hasattr(sourcedist, "log_prob"):
             # Source distribution does not have a log-probability function
             return None
         # assert targets.shape == sourcedist.log_prob(targets).shape
@@ -137,13 +140,13 @@ class ContNormFlow(nn.Module):
             return dx, trace * 1e-2
 
         # Initialize log-determinant Jacobian term
-        ladj = torch.zeros_like(targets[..., 0])  # [B]
+        ladj = torch.zeros_like(targets[..., 0], device=targets.device)  # [B]
         # Solve the ODE for the augmented system with trace regularization
         # Computing the log-likelihood of a ContNormFlow requires to integrate an ODE.
         # I use the odeint function provided by Zuko to do so.
         # It implements the adaptive checkpoint adjoint (ACA) method which allows for more accurate back-propagation than the standard adjoint method implemented by torchdiffeq.
         # [B, D] -> [B, D], [B]
-        z, ladj = odeint(f=augmented, x=(targets, ladj), t0=self.tdata, t1=self.tnoise, phi=self.parameters())
+        z, ladj = zuko_odeint(f=augmented, x=(targets, ladj), t0=self.tdata, t1=self.tnoise, phi=self.parameters())
 
         # Final log-probability calculation with adjusted trace (scale back by 1e2)
         # log_prob: [B,2] -> [B]
