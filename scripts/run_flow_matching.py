@@ -25,12 +25,16 @@ def run_with_hydra(args: DictConfig) -> None:
 
     # Plot the generated samples and the loss
     trainer.plot_data(x=gensamples, step=trainer.step)
-    trainer.plot_loss(losses=losses)
-    trainer.plot_loss(losses=log_probs, fname="logprobs")
+    fname = trainer.plot_loss(losses=losses)
+    print(f"Saved loss plot to\n {fname}")
+    fname = trainer.plot_loss(losses=log_probs, fname="logprobs")
+    print(f"Saved logprobs plot to\n {fname}")
 
     # Plot the training and validation distributions
-    trainer.plot_data(x=trainer.data_train, step=0, folder="plots/data", fname=f"{cfg['dataset']}_train.png")
-    trainer.plot_data(x=trainer.data_val, step=0, folder="plots/data", fname=f"{cfg['dataset']}_val.png")
+    fname = trainer.plot_data(x=trainer.data_train, step=0, folder="plots/data", fname=f"{cfg['dataset']}_train.png")
+    print(f"Saved training data plot to\n {fname}")
+    fname = trainer.plot_data(x=trainer.data_val, step=0, folder="plots/data", fname=f"{cfg['dataset']}_val.png")
+    print(f"Saved validation data plot to\n {fname}")
 
     print(
         f"Log probability: {log_p.nanmean():.2f} ± {torch.std(log_p[~log_p.isnan()]):.2f}" 

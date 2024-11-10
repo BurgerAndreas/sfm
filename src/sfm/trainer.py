@@ -149,7 +149,8 @@ class Trainer:
                 log_p = torch.nanmean(log_p)
                 self.logger.log({"log_p": log_p}, step=self.step, split="val")
                 log_probs.append(log_p.item())
-                self.plot_data(x=gensamples, step=self.step)
+                fname = self.plot_data(x=gensamples, step=self.step)
+                tqdm.write(f"Saved data plot to\n {fname}")
 
             self.step += 1
 
@@ -195,7 +196,7 @@ class Trainer:
             folder = self.logdir
         fname = folder + "/" + fname
         plt.savefig(fname)
-        print(f"\nSaved data plot to\n {fname}")
+        return fname
 
     def plot_loss(self, losses, folder: str = None, fname: str = ""):
         plt.figure(figsize=(4.8, 4.8), dpi=150)
@@ -207,4 +208,4 @@ class Trainer:
             folder = self.logdir
         fname = folder + "/" + fname
         plt.savefig(fname)
-        print(f"Saved loss plot to\n {fname}")
+        return fname
