@@ -74,10 +74,12 @@ def get_lr_schedule(optimizer, cfg: Dict):
 class Trainer:
     def __init__(self, cfg: Dict):
         self.cfg = cfg
+        self.fnamebase = f"{cfg['dataset']}_{cfg['source']['type']}_{cfg['fmloss']}_{cfg['n_ode']}"
+
         self.cfg = self.init_logging(cfg)
         self.device = torch.device("cuda" if torch.cuda.is_available() and not cfg["force_cpu"] else "cpu")
         torch.set_default_device(self.device)
-        
+
         model = MLPwithTimeEmbedding(**cfg["model"], device=self.device).to(self.device)
         if cfg["n_ode"] == "zuko":
             self.flow = ContNormFlow(model=model, fmtime=cfg["fmtime"])
@@ -136,20 +138,22 @@ class Trainer:
             lr_schedule.step()
             losses.append(loss.item())
 
-            if trainstep % self.cfg["logfreq"] == 0:
+            if (trainstep + 1) % self.cfg["logfreq"] == 0:
                 self.logger.log(
                     {"loss": loss.item(), "lr": optimizer.param_groups[0]["lr"]}, step=self.step, split="train"
                 )
 
-            if trainstep % self.cfg["evalfreq"] == 0:
+            if (trainstep + 1) % self.cfg["evalfreq"] == 0:
                 gensamples, log_p = self.evaluate()
-                self.logger.log({"log_p": log_p.mean()}, step=self.step, split="val")
-                log_probs.append(log_p.mean())
-                plot_data(x=gensamples, cfg=self.cfg, step=self.step)
+                # log_p tends to be contain NaNs if sample is outside of support of source distribution
+                log_p = torch.nanmean(log_p)
+                self.logger.log({"log_p": log_p}, step=self.step, split="val")
+                log_probs.append(log_p.item())
+                self.plot_data(x=gensamples, step=self.step)
 
             self.step += 1
 
-        return losses
+        return losses, log_probs
 
     def evaluate(self, eval_samples: int = None) -> Tuple[Tensor, Tensor]:
         # Generate samples from the flow
@@ -169,41 +173,38 @@ class Trainer:
     def init_logging(self, cfg: Dict):
         self.logger = get_logger(cfg)
         # Create a directory for logging
-        logdir = f"logs/{cfg['dataset']}_{cfg['source']['type']}_{cfg['fmloss']}_{cfg['n_ode']}"
+        logdir = f"logs/{self.fnamebase}"
         os.makedirs(logdir, exist_ok=True)
         cfg["logdir"] = logdir
+        self.logdir = logdir
         return cfg
 
     def finalize(self):
         self.logger.stop()
 
+    def plot_data(self, x, step: int, folder: str = None, fname: str = ""):
+        if isinstance(x, torch.Tensor):
+            x = x.cpu().numpy()
 
-def plot_data(x, cfg, step: int, folder: str = None, fname: str = None):
-    if isinstance(x, torch.Tensor):
-        x = x.cpu().numpy()
+        assert x.shape[1] == self.cfg["datadim"], f"Expected (...,{self.cfg['datadim']}) dimensions, got {x.shape}"
 
-    assert x.shape[1] == cfg["datadim"], f"Expected (...,{cfg['datadim']}) dimensions, got {x.shape}"
+        plt.figure(figsize=(4.8, 4.8), dpi=150)
+        plt.hist2d(*x.T, bins=64)
+        fname += f"_s{step}.png"
+        if folder is None:
+            folder = self.logdir
+        fname = folder + "/" + fname
+        plt.savefig(fname)
+        print(f"\nSaved data plot to\n {fname}")
 
-    plt.figure(figsize=(4.8, 4.8), dpi=150)
-    plt.hist2d(*x.T, bins=64)
-    if fname is None:
-        fname = f"{cfg['dataset']}_{cfg['source']['type']}_s{step}.png"
-    if folder is None:
-        folder = cfg["logdir"]
-    fname = folder + "/" + fname
-    plt.savefig(fname)
-    print(f"Saved data plot to\n {fname}")
-
-
-def plot_loss(losses, cfg, folder: str = None, fname: str = None):
-    plt.figure(figsize=(4.8, 4.8), dpi=150)
-    plt.plot(losses)
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    if fname is None:
-        fname = f"{cfg['dataset']}_{cfg['source']['type']}_loss.png"
-    if folder is None:
-        folder = cfg["logdir"]
-    fname = folder + "/" + fname
-    plt.savefig(fname)
-    print(f"Saved loss plot to\n {fname}")
+    def plot_loss(self, losses, folder: str = None, fname: str = ""):
+        plt.figure(figsize=(4.8, 4.8), dpi=150)
+        plt.plot(losses)
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        fname += "_loss.png"
+        if folder is None:
+            folder = self.logdir
+        fname = folder + "/" + fname
+        plt.savefig(fname)
+        print(f"Saved loss plot to\n {fname}")

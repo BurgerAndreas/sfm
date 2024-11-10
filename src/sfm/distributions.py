@@ -155,10 +155,9 @@ class BetaSource(SourceDistribution):
         self.beta = beta
         super().__init__(data_dim, **kwargs)
         self.dist = torch.distributions.Beta(
-            torch.as_tensor(alpha).to(self.device), 
-            torch.as_tensor(beta).to(self.device)
+            torch.as_tensor(alpha).to(self.device), torch.as_tensor(beta).to(self.device)
         )
-    
+
     def to(self, device):
         self.dist._dirichlet.concentration = self.dist._dirichlet.concentration.to(device)
         return self

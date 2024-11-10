@@ -31,7 +31,7 @@ class MLPwithTimeEmbedding(nn.Sequential):
         # part of the module's state but not a parameter
 
         in_features += 2 * freqs
-        
+
         layers = []
         for a, b in zip(
             (in_features, *hidden_features),
@@ -167,7 +167,7 @@ class NeuralODEWrapper(NeuralODE):
             t_span=torch.linspace(0, 1, 100, device=self.device),
         )
         return traj[-1]
-    
+
     def forward(self, t, x, y=None, *args, **kwargs):
         # swap around x and t
         return super().forward(x, t, y, *args, **kwargs)
@@ -280,7 +280,7 @@ class LipmanTCFMLoss(nn.Module):
     def __init__(self, v: nn.Module, sigma: float = 1e-1):
         """TorchCFM version of the Lipman loss"""
         super().__init__()
-        self.v = v # NeuralODE
+        self.v = v  # NeuralODE
         self.sigma = sigma
         self.fm = TargetConditionalFlowMatcher(sigma=sigma)
 

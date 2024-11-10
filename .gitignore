@@ -10,3 +10,7 @@ outputs/*
 **/__pycache__
 **/*.pyc
 **/.vscode
+
+wandb
+.neptune
+neptune

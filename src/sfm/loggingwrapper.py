@@ -4,6 +4,7 @@ import os
 import omegaconf
 from omegaconf import OmegaConf
 import numpy as np
+import torch
 
 
 class LoggingWrapper:
@@ -60,13 +61,37 @@ class NeptuneWrapper(LoggingWrapper):
             # dependencies="infer",
             # # with_id="CLS-123", # resume a run
         )
-        self.run["parameters"] = args
+        # args to dict
+        args_dict = OmegaConf.to_container(args, resolve=True)
+        # stringify_unsupported() to convert values of unsupported types to strings
+        args_dict = neptune.utils.stringify_unsupported(args_dict)
+        self.run["parameters"] = args_dict
+
+    def log_safely(self, metrics: dict, step: int, split: str):
+        # V1
+        for key, value in metrics.items():
+            if "log_p" in key:
+                print(f"=== log_p: {value}", type(value))
+            # ValueError: Out of range float values are not JSON compliant
+            if (isinstance(value, float) and np.isnan(value)) or isinstance(value, torch.Tensor) and torch.isnan(value):
+                value = "NaN"
+            elif (
+                isinstance(value, float)
+                and value == float("inf")
+                or isinstance(value, torch.Tensor)
+                and value == float("inf")
+            ):
+                value = "Infinity"
+            elif (
+                isinstance(value, float)
+                and value == float("-inf")
+                or isinstance(value, torch.Tensor)
+                and value == float("-inf")
+            ):
+                value = "-Infinity"
+            self.run[split + "/" + key].append(value, step=step)
 
     def log(self, metrics: dict, step: int, split: str):
-        # V1
-        # for key, value in metrics.items():
-        #     self.run[split + "/" + key].append(value, step=step)
-        # V2
         self.run["split"].append(metrics, step=step)
 
     def log_img(self, img, step, split):
