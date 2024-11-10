@@ -24,17 +24,14 @@ class MLPwithTimeEmbedding(nn.Sequential):
         freqs: int = 3,
         hidden_features: List[int] = [64, 64],
         time_varying: bool = True,
+        device: str = "cpu",
     ):
         # "positional encoding" or "time embedding" and allows the network to adjust its behavior with respect to t
         # with more granularity than by simply giving it as input the time t.
         # part of the module's state but not a parameter
-        if time_varying is False:
-            nfreqs = 0
-        else:
-            nfreqs = int(max(0, freqs))
-            in_features = in_features + 2 * nfreqs
-        self.nfreqs = nfreqs
 
+        in_features += 2 * freqs
+        
         layers = []
         for a, b in zip(
             (in_features, *hidden_features),
@@ -43,23 +40,16 @@ class MLPwithTimeEmbedding(nn.Sequential):
             layers.extend([nn.Linear(a, b), nn.ELU()])
         super().__init__(*layers[:-1])
 
-        if self.nfreqs > 0:
-            self.register_buffer("freqs", torch.arange(1, self.nfreqs + 1) * torch.pi)
+        self.register_buffer("freqs", torch.arange(1, freqs + 1, device=device) * torch.pi)
 
-    def forward(self, t: Tensor, x: Tensor = None, y: Tensor = None) -> Tensor:
+    def forward(self, t: Tensor, x: Tensor = None, *args, **kwargs) -> Tensor:
         # Encode time with sinusoidal features to capture periodicity
-        if self.nfreqs > 0:
-            # t: [B] -> [B, 1]
-            t = self.freqs * t[..., None]  # [B, f]
-            t = torch.cat((t.cos(), t.sin()), dim=-1)  # [B, 2f]
-            t = t.expand(*x.shape[:-1], -1)  # [B, 2f]
-            x = torch.cat((t, x), dim=-1)
-        elif self.nfreqs == 0:
-            pass
-        else:
-            t = t[..., None]  # [B, 1]
-            x = torch.cat((t, x), dim=-1)
-        return super().forward(x)  # [B, D+2f]
+        # t: [B] -> [B, 1]
+        t = self.freqs * t[..., None]  # [B, f]
+        t = torch.cat((t.cos(), t.sin()), dim=-1)  # [B, 2f]
+        t = t.expand(*x.shape[:-1], -1)  # [B, 2f]
+        x = torch.cat((t, x), dim=-1)  # [B, D+2f]
+        return super().forward(x)
 
 
 # Continuous Normalizing Flow (ContNormFlow) class
@@ -162,7 +152,10 @@ class ContNormFlow(nn.Module):
 
 class NeuralODEWrapper(NeuralODE):
     def __init__(self, model, **kwargs):
+        # Without torchdyn_wrapper, the model is not compatible with torchdyn
+        # Your vector field does not have `nn.Parameters` to optimize.
         super().__init__(torchdyn_wrapper(model), **kwargs)
+        # super().__init__(model, return_t_eval=False, **kwargs)
 
     def decode(self, sources: Tensor) -> Tensor:
         # [T, B, D]
@@ -171,6 +164,10 @@ class NeuralODEWrapper(NeuralODE):
             t_span=torch.linspace(0, 1, 100, device=self.device),
         )
         return traj[-1]
+    
+    def forward(self, t, x, y=None, *args, **kwargs):
+        # swap around x and t
+        return super().forward(x, t, y, *args, **kwargs)
 
     # TODO: doesn't work yet
     def log_prob(self, targets: Tensor, sourcedist) -> Tensor:
@@ -233,8 +230,9 @@ class torchdyn_wrapper(torch.nn.Module):
         # t: [] -> [B, 1]
         # x: [B, D]
         # model: [B, D+1] -> [B, D]
-        # return self.model(torch.cat([x, t.repeat(x.shape[0])[:, None]], 1))
+        # TODO: torchdyn only accepts one input tensor
         return self.model(x=x, t=t.repeat(x.shape[0])[:, None], y=y)
+        # return self.model(torch.cat([x, t.repeat(x.shape[0])[:, None]], 1))
 
 
 class LipmanFMLoss(nn.Module):
@@ -264,7 +262,7 @@ class LipmanFMLoss(nn.Module):
         σt(x) = 1 - (1 - σmin)*t (20)
         """
         # Sample random time step from [0, 1]
-        t = torch.rand_like(targets[..., 0, None])
+        t = torch.rand_like(targets[..., 0, None], device=targets.device)
 
         # Interpolation between data and noise
         # psi = ψ = μt(x) + σt(x)*x0
@@ -279,7 +277,7 @@ class LipmanTCFMLoss(nn.Module):
     def __init__(self, v: nn.Module, sigma: float = 1e-1):
         """TorchCFM version of the Lipman loss"""
         super().__init__()
-        self.v = v
+        self.v = v # NeuralODE
         self.sigma = sigma
         self.fm = TargetConditionalFlowMatcher(sigma=sigma)
 

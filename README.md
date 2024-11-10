@@ -1,6 +1,6 @@
-# Flow Matching with source distributions
+# Flow Matching beyond Gaussian Source Distributions
 
-based on [Francois Rozet's gist](https://gist.github.com/francois-rozet/fd6a820e052157f8ac6e2aa39e16c1aa)
+Based on [Francois Rozet's gist](https://gist.github.com/francois-rozet/fd6a820e052157f8ac6e2aa39e16c1aa)
 and [TorchCFM](https://github.com/atong01/conditional-flow-matching)
 
 
@@ -8,11 +8,10 @@ and [TorchCFM](https://github.com/atong01/conditional-flow-matching)
 
 ```bash
 mamba activate sfm
-python scripts/run_flow_matching.py
 ```
-We use hydra to manage the config.
-
+We use hydra to manage configs. To compare different flow matching losses:
 ```bash
+python scripts/run_flow_matching.py fmloss=lipman fmtime=false
 python scripts/run_flow_matching.py fmloss=lipmantcfm fmtime=true
 # these are the most interesting, since they work with arbitrary source distributions
 python scripts/run_flow_matching.py fmloss=cfm fmtime=true

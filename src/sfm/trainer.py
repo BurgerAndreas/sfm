@@ -76,8 +76,8 @@ class Trainer:
         self.cfg = cfg
         self.cfg = self.init_logging(cfg)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        model = MLPwithTimeEmbedding(**cfg["model"])
+        
+        model = MLPwithTimeEmbedding(**cfg["model"], device=self.device).to(self.device)
         if cfg["n_ode"] == "zuko":
             self.flow = ContNormFlow(model=model, fmtime=cfg["fmtime"])
         elif cfg["n_ode"] == "torchdyn":
@@ -103,13 +103,13 @@ class Trainer:
     def train(self) -> List[float]:
         # Training
         if self.cfg["fmloss"] == "lipman":
-            loss_fn = LipmanFMLoss(self.flow)
+            loss_fn = LipmanFMLoss(self.flow).to(self.device)
         elif self.cfg["fmloss"] == "lipmantcfm":
-            loss_fn = LipmanTCFMLoss(self.flow)
+            loss_fn = LipmanTCFMLoss(self.flow).to(self.device)
         elif self.cfg["fmloss"] == "cfm":
-            loss_fn = CFMLoss(self.flow)
+            loss_fn = CFMLoss(self.flow).to(self.device)
         elif self.cfg["fmloss"] == "otcfm":
-            loss_fn = OTCFMLoss(self.flow)
+            loss_fn = OTCFMLoss(self.flow).to(self.device)
         else:
             raise ValueError(f"Unknown loss function: {self.cfg['fmloss']}")
 
@@ -122,9 +122,9 @@ class Trainer:
         for trainstep in tqdm(range(self.cfg["n_trainsteps"]), ncols=44):
             # Randomly select a batch of data = samples from the data distribution
             subset = torch.randint(0, len(self.data_train), (self.cfg["batch_size"],))
-            targets = self.data_train[subset]
+            targets = self.data_train[subset].to(self.device)
             # sample from the source distribution
-            sources = self.sourcedist.sample(self.cfg["batch_size"])
+            sources = self.sourcedist.sample(self.cfg["batch_size"]).to(self.device)
 
             loss = loss_fn(sources=sources, targets=targets)
 
@@ -152,7 +152,7 @@ class Trainer:
     def evaluate(self, eval_samples: int = None) -> Tuple[Tensor, Tensor]:
         # Generate samples from the flow
         with torch.no_grad():
-            sources = self.sourcedist.sample(eval_samples or self.cfg["n_samples"])
+            sources = self.sourcedist.sample(eval_samples or self.cfg["n_samples"]).to(self.device)
             gen_targets = self.flow.decode(sources)  # [B, D]
 
         # Log-likelihood of true unseen data under the flow
