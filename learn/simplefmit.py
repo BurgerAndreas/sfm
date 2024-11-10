@@ -15,14 +15,16 @@ from zuko.utils import odeint
 def log_normal(x: Tensor) -> Tensor:
     return -(x.square() + math.log(2 * math.pi)).sum(dim=-1) / 2
 
-tnoise = 1.
-tdata = 0.
+
+tnoise = 1.0
+tdata = 0.0
 
 reverse_time = False
 reverse_fm = False
 
 if reverse_time:
     tdata, tnoise = tnoise, tdata
+
 
 class MLP(nn.Sequential):
     def __init__(
@@ -48,7 +50,7 @@ class ContNormFlow(nn.Module):
 
         self.net = MLP(2 * freqs + features, features, **kwargs)
 
-        self.register_buffer('freqs', torch.arange(1, freqs + 1) * torch.pi)
+        self.register_buffer("freqs", torch.arange(1, freqs + 1) * torch.pi)
 
     def forward(self, t: Tensor, x: Tensor) -> Tensor:
         t = self.freqs * t[..., None]
@@ -73,7 +75,7 @@ class ContNormFlow(nn.Module):
                 dx = self(t, x)
 
             jacobian = torch.autograd.grad(dx, x, I, create_graph=True, is_grads_batched=True)[0]
-            trace = torch.einsum('i...i', jacobian)
+            trace = torch.einsum("i...i", jacobian)
 
             return dx, trace * 1e-2
 
@@ -93,11 +95,11 @@ class FlowMatchingLoss(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         t = torch.rand_like(x[..., 0, None])
         z = torch.randn_like(x)
-        
+
         # t = (1 - t) # if reverse_time else t
         y = (1 - t) * x + (1e-4 + (1 - 1e-4) * t) * z
         u = (1 - 1e-4) * z - x
-        
+
         if reverse_fm:
             y = (1 - (1 - 1e-4) * t) * z + (t * x)
             u = (1 - 1e-4) * z - x
@@ -105,7 +107,7 @@ class FlowMatchingLoss(nn.Module):
         return (self.v(t.squeeze(-1), y) - u).square().mean()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     batch_size = 256
     flow = ContNormFlow(2, hidden_features=[64] * 3)
 
@@ -116,7 +118,7 @@ if __name__ == '__main__':
     data, _ = make_moons(16384, noise=0.05)
     data = torch.from_numpy(data).float()
 
-    # Eval 
+    # Eval
     # Log-likelihood
     with torch.no_grad():
         log_p = flow.log_prob(data[:batch_size])
@@ -142,7 +144,7 @@ if __name__ == '__main__':
 
     plt.figure(figsize=(4.8, 4.8), dpi=150)
     plt.hist2d(*x.T, bins=64)
-    plt.savefig('moons_fm.pdf')
+    plt.savefig("moons_fm.pdf")
     print("Saved figure to moons_fm.pdf")
 
     # Log-likelihood

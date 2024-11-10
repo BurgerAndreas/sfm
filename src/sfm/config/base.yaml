@@ -30,6 +30,10 @@ model:
 fmloss: lipman
 n_ode: zuko
 
+# if true, use flow matching time convention
+# t=0 is noise, t=1 is data
+fmtime: false
+
 # logging
 logger: null # neptune, wandb
 tags: null

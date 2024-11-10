@@ -40,7 +40,7 @@ class ContNormFlow(nn.Module):
 
         self.net = MLP(2 * freqs + features, features, **kwargs)
 
-        self.register_buffer('freqs', torch.arange(1, freqs + 1) * torch.pi)
+        self.register_buffer("freqs", torch.arange(1, freqs + 1) * torch.pi)
 
     def forward(self, t: Tensor, x: Tensor) -> Tensor:
         t = self.freqs * t[..., None]
@@ -65,7 +65,7 @@ class ContNormFlow(nn.Module):
                 dx = self(t, x)
 
             jacobian = torch.autograd.grad(dx, x, I, create_graph=True, is_grads_batched=True)[0]
-            trace = torch.einsum('i...i', jacobian)
+            trace = torch.einsum("i...i", jacobian)
 
             return dx, trace * 1e-2
 
@@ -91,7 +91,7 @@ class FlowMatchingLoss(nn.Module):
         return (self.v(t.squeeze(-1), y) - u).square().mean()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     batch_size = 256
     flow = ContNormFlow(2, hidden_features=[64] * 3)
 
@@ -102,12 +102,11 @@ if __name__ == '__main__':
     data, _ = make_moons(16384, noise=0.05)
     data = torch.from_numpy(data).float()
 
-    # Eval 
+    # Eval
     # Log-likelihood
     with torch.no_grad():
         log_p = flow.log_prob(data[:batch_size])
         print(f"Log probability: {log_p.mean():.3f} ± {log_p.std():.3f}")
-
 
     # Training
     for epoch in tqdm(range(16384), ncols=44):
@@ -129,7 +128,7 @@ if __name__ == '__main__':
 
     plt.figure(figsize=(4.8, 4.8), dpi=150)
     plt.hist2d(*x.T, bins=64)
-    plt.savefig('moons_fm.pdf')
+    plt.savefig("moons_fm.pdf")
 
     # Log-likelihood
     with torch.no_grad():

@@ -8,7 +8,11 @@ from typing import *
 from zuko.utils import odeint
 from torchdyn.core import NeuralODE
 
-from torchcfm.conditional_flow_matching import ConditionalFlowMatcher, TargetConditionalFlowMatcher, ExactOptimalTransportConditionalFlowMatcher
+from torchcfm.conditional_flow_matching import (
+    ConditionalFlowMatcher,
+    TargetConditionalFlowMatcher,
+    ExactOptimalTransportConditionalFlowMatcher,
+)
 
 
 # Simple MLP architecture for the neural network modeling the vector field
@@ -30,7 +34,7 @@ class MLPwithTimeEmbedding(nn.Sequential):
             nfreqs = int(max(0, freqs))
             in_features = in_features + 2 * nfreqs
         self.nfreqs = nfreqs
-        
+
         layers = []
         for a, b in zip(
             (in_features, *hidden_features),
@@ -38,30 +42,31 @@ class MLPwithTimeEmbedding(nn.Sequential):
         ):
             layers.extend([nn.Linear(a, b), nn.ELU()])
         super().__init__(*layers[:-1])
-        
+
         if self.nfreqs > 0:
             self.register_buffer("freqs", torch.arange(1, self.nfreqs + 1) * torch.pi)
-    
+
     def forward(self, t: Tensor, x: Tensor = None, y: Tensor = None) -> Tensor:
         # Encode time with sinusoidal features to capture periodicity
         if self.nfreqs > 0:
-            # t: [B] -> [B, 1]        
-            t = self.freqs * t[..., None] # [B, f]
-            t = torch.cat((t.cos(), t.sin()), dim=-1) # [B, 2f]
-            t = t.expand(*x.shape[:-1], -1) # [B, 2f]
+            # t: [B] -> [B, 1]
+            t = self.freqs * t[..., None]  # [B, f]
+            t = torch.cat((t.cos(), t.sin()), dim=-1)  # [B, 2f]
+            t = t.expand(*x.shape[:-1], -1)  # [B, 2f]
             x = torch.cat((t, x), dim=-1)
         elif self.nfreqs == 0:
             pass
         else:
-            t = t[..., None] # [B, 1]
+            t = t[..., None]  # [B, 1]
             x = torch.cat((t, x), dim=-1)
-        return super().forward(x) # [B, D+2f]
+        return super().forward(x)  # [B, D+2f]
+
 
 # Continuous Normalizing Flow (ContNormFlow) class
 # This class models the vector field v(t, x) that generates the probability path
 # Eq. (1) in the paper defines the vector field
 class ContNormFlow(nn.Module):
-    def __init__(self, model: nn.Module, **kwargs):
+    def __init__(self, model: nn.Module, fmtime=False, **kwargs):
         """Continuous Normalizing Flow (ContNormFlow) class
 
         Our continuous normalizing flow (ContNormFlow) is a simple multi-layer perceptron (MLP).
@@ -73,21 +78,23 @@ class ContNormFlow(nn.Module):
             **kwargs: Additional keyword arguments for the MLP.
         """
         super().__init__()
-
         self.net = model
+        # diffusion / Francois time convention
+        self.tnoise = 1.0
+        self.tdata = 0.0
+        # flow matching / TorchCFM time convention
+        if fmtime:
+            self.tdata = 1.0
+            self.tnoise = 0.0
 
     def forward(self, t: Tensor, x: Tensor, y: Tensor = None) -> Tensor:
         # Forward pass through the MLP network to model the vector field
         return self.net(t=t, x=x, y=y)
 
     # Encode (from data to noise)
-    # Uses the ODE solving strategy described in Eq. (1)
-    # The solver traces the flow from data to noise 
     def encode(self, x: Tensor) -> Tensor:
-        return odeint(f=self, x=x, t0=0.0, t1=1.0, phi=self.parameters())
+        return odeint(f=self, x=x, t0=self.tdata, t1=self.tnoise, phi=self.parameters())
 
-    # Decode (from noise to data)
-    # Reverse the flow from noise to data 
     def decode(self, sources: Tensor) -> Tensor:
         """Go from noise to data.
 
@@ -97,26 +104,17 @@ class ContNormFlow(nn.Module):
         Returns:
             Tensor: generated sample [B, D]
         """
-        return odeint(f=self, x=sources, t0=1.0, t1=0.0, phi=self.parameters())
-    
-    # TODO: return full trajectory for visualization
-    # def trajectory(self, x: Tensor, t_span: Tensor) -> Tensor:
-    #     # # [T, B, D]
-    #     # traj = self.trajectory(
-    #     #     x=x,
-    #     #     t_span=torch.linspace(0, 1, 100, device=device),
-    #     # )
-    #     return odeint(f=self, x=x, t0=t_span[0], t1=t_span[-1], phi=self.parameters())
+        return odeint(f=self, x=sources, t0=self.tnoise, t1=self.tdata, phi=self.parameters())
 
     def log_prob(self, targets: Tensor, sourcedist) -> Tensor:
         """
         Compute log-probability of data points.
-        Reverse the flow from data to noise, 
+        Reverse the flow from data to noise,
         then compute the log-probability of the noise under the source distribution.
         Computes the log-determinant Jacobian term as in Eq. (27)
 
-        To compute p1(x1) we first solve the ODE in equation 31 
-        with initial conditions in equation 32, 
+        To compute p1(x1) we first solve the ODE in equation 31
+        with initial conditions in equation 32,
         and then compute equation 33
         in Lipman et al. Flow Matching for Generative Modeling
 
@@ -155,16 +153,17 @@ class ContNormFlow(nn.Module):
         # I use the odeint function provided by Zuko to do so.
         # It implements the adaptive checkpoint adjoint (ACA) method which allows for more accurate back-propagation than the standard adjoint method implemented by torchdiffeq.
         # [B, D] -> [B, D], [B]
-        z, ladj = odeint(f=augmented, x=(targets, ladj), t0=0., t1=1., phi=self.parameters())
+        z, ladj = odeint(f=augmented, x=(targets, ladj), t0=self.tdata, t1=self.tnoise, phi=self.parameters())
 
         # Final log-probability calculation with adjusted trace (scale back by 1e2)
         # log_prob: [B,2] -> [B]
         return sourcedist.log_prob(z) + ladj * 1e2
 
+
 class NeuralODEWrapper(NeuralODE):
     def __init__(self, model, **kwargs):
         super().__init__(torchdyn_wrapper(model), **kwargs)
-    
+
     def decode(self, sources: Tensor) -> Tensor:
         # [T, B, D]
         traj = self.trajectory(
@@ -208,15 +207,17 @@ class NeuralODEWrapper(NeuralODE):
         # It implements the adaptive checkpoint adjoint (ACA) method which allows for more accurate back-propagation than the standard adjoint method implemented by torchdiffeq.
         # [B, D] -> [B, D], [B]
         # z, ladj = odeint(f=augmented, x=(targets, ladj), t0=0.0, t1=1.0, phi=self.parameters())
-        traj = self.trajectory(
+        node = NeuralODEWrapper(augmented)
+        traj = node.trajectory(
             x=targets,
-            t_span=torch.linspace(start=1, end=0, steps=100, device=self.device),
+            t_span=torch.linspace(start=self.tdata, end=self.tnoise, steps=100, device=self.device),
         )
         z, ladj = traj[-1]
 
         # Final log-probability calculation with adjusted trace (scale back by 1e2)
         # log_prob: [B,2] -> [B]
         return sourcedist.log_prob(z) + ladj * 1e2
+
 
 class torchdyn_wrapper(torch.nn.Module):
     """Wraps model to torchdyn compatible format.
@@ -238,7 +239,7 @@ class torchdyn_wrapper(torch.nn.Module):
 
 class LipmanFMLoss(nn.Module):
     def __init__(self, v: nn.Module, sigma: float = 1e-4):
-        """CFM loss based on Equation 23 in the flow matching paper 
+        """CFM loss based on Equation 23 in the flow matching paper
         https://arxiv.org/pdf/2210.02747.pdf
 
         ψ_t(x) = y: conditional flow
@@ -252,7 +253,7 @@ class LipmanFMLoss(nn.Module):
         super().__init__()
         self.v = v
         self.sigma = sigma
-        
+
     def forward(self, sources: Tensor, targets: Tensor) -> Tensor:
         """Optimal Transport conditional VF of a Gaussian.
         sources=x0: source samples
@@ -263,15 +264,16 @@ class LipmanFMLoss(nn.Module):
         σt(x) = 1 - (1 - σmin)*t (20)
         """
         # Sample random time step from [0, 1]
-        t = torch.rand_like(targets[..., 0, None]) 
+        t = torch.rand_like(targets[..., 0, None])
 
         # Interpolation between data and noise
-        # psi = ψ = μt(x) + σt(x)*x0 
+        # psi = ψ = μt(x) + σt(x)*x0
         psi = (1 - t) * targets + (self.sigma + (1 - self.sigma) * t) * sources
         # Target vector field u in Eq. (21) and Eq. (23)
         # loss = ||vt(ψt(x0)) − x1 − (1 − σmin)x0||
         u = (1 - self.sigma) * sources - targets
         return (self.v(t.squeeze(-1), psi) - u).square().mean()
+
 
 class LipmanTCFMLoss(nn.Module):
     def __init__(self, v: nn.Module, sigma: float = 1e-1):
@@ -280,33 +282,30 @@ class LipmanTCFMLoss(nn.Module):
         self.v = v
         self.sigma = sigma
         self.fm = TargetConditionalFlowMatcher(sigma=sigma)
-    
+
     def forward(self, sources: Tensor, targets: Tensor, labels: Tensor = None) -> Tensor:
         # sources=x0: source samples
         # targets=x1: data samples
         # labels=y: optional class label for conditional generation
         # [B], [B, D], [B, D]
         t, xt, ut = self.fm.sample_location_and_conditional_flow(sources, targets)
-        
+
         # [B, D+1] -> [B, D]
         # vt = model(torch.cat([xt, t[:, None]], dim=-1))
         vt = self.v(t=t, x=xt, y=labels)
 
         return torch.mean((vt - ut) ** 2)
-        
+
+
 class CFMLoss(LipmanTCFMLoss):
     def __init__(self, v: nn.Module, sigma: float = 1e-1):
         """TorchCFM version of non-OT loss from Tong et al."""
-        super().__init__()
-        self.v = v
-        self.sigma = sigma
+        super().__init__(v=v, sigma=sigma)
         self.fm = ConditionalFlowMatcher(sigma=sigma)
-        
+
+
 class OTCFMLoss(LipmanTCFMLoss):
     def __init__(self, v: nn.Module, sigma: float = 1e-1):
         """TorchCFM version of OT loss from Tong et al."""
-        super().__init__()
-        self.v = v
-        self.sigma = sigma
+        super().__init__(v=v, sigma=sigma)
         self.fm = ExactOptimalTransportConditionalFlowMatcher(sigma=sigma)
-

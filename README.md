@@ -13,9 +13,15 @@ python scripts/run_flow_matching.py
 We use hydra to manage the config.
 
 ```bash
-python scripts/run_flow_matching.py fmloss=lipmantcfm
-python scripts/run_flow_matching.py fmloss=cfm
-python scripts/run_flow_matching.py fmloss=otcfm
+python scripts/run_flow_matching.py fmloss=lipmantcfm fmtime=true
+# these are the most interesting, since they work with arbitrary source distributions
+python scripts/run_flow_matching.py fmloss=cfm fmtime=true
+python scripts/run_flow_matching.py fmloss=otcfm fmtime=true
+```
+
+To plot trajectories
+```bash
+python scripts/run_flow_matching.py fmloss=cfm fmtime=true n_ode=torchdyn
 ```
 
 ## Installation

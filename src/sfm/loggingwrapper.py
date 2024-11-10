@@ -124,8 +124,9 @@ def get_logger(args):
     else:
         raise ValueError("Invalid logger")
 
+
 class ArgsDict:
-    def __init__(self, args = {}):
+    def __init__(self, args={}):
         self._args = args
 
     def __getattr__(self, name):
@@ -163,4 +164,3 @@ class ArgsDict:
 
     def __ne__(self, other):
         return self._args != other
-

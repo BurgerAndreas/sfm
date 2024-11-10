@@ -36,5 +36,6 @@ def run_with_hydra(args: DictConfig) -> None:
     trainer.finalize()
     print("\nDone ✅")
 
+
 if __name__ == "__main__":
     run_with_hydra()

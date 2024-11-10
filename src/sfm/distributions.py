@@ -43,15 +43,18 @@ class SourceDistribution:
         """
         return self.dist.sample((nsamples, self.data_dim))
 
+
 class CoupledSourceDistribution(SourceDistribution):
     """Distributions where the data dimensions are coupled (not independent).
     The log-probability and the samples have different shapes.
     """
+
     def log_prob(self, x: Tensor) -> Tensor:
         return self.dist.log_prob(x)
-    
+
     def sample(self, nsamples: int | tuple) -> Tensor:
-        return self.dist.sample((nsamples, ))
+        return self.dist.sample((nsamples,))
+
 
 class UniformSource(SourceDistribution):
     def __init__(self, low: float = 0.0, high: float = 1.0, data_dim: int = 2, **kwargs):
@@ -67,10 +70,11 @@ class StandardNormalSource(SourceDistribution):
 
     def log_prob(self, x: Tensor) -> Tensor:
         return self.dist.log_prob(x).sum(dim=-1)
-    
+
     # should be the same as
     # def log_normal(x: Tensor) -> Tensor:
     #     return -(x.square() + math.log(2 * math.pi)).sum(dim=-1) / 2
+
 
 class IsotropicGaussianSource(CoupledSourceDistribution):
     def __init__(self, mu: Tensor = torch.tensor([0.0, 0.0]), sigma: float = 1.0, data_dim: int = 2, **kwargs):
@@ -81,8 +85,7 @@ class IsotropicGaussianSource(CoupledSourceDistribution):
         self.sigma = sigma
         self.data_dim = data_dim
         self.dist = torch.distributions.MultivariateNormal(
-            loc=self.mu,
-            covariance_matrix=torch.diag(torch.tensor([sigma] * data_dim))
+            loc=self.mu, covariance_matrix=torch.diag(torch.tensor([sigma] * data_dim))
         )
 
 
@@ -98,9 +101,7 @@ class DiagonalGaussianSource(CoupledSourceDistribution):
         self.mu = torch.as_tensor(mu)
         self.sigma = torch.as_tensor(sigma)
         self.data_dim = data_dim
-        self.dist = torch.distributions.MultivariateNormal(
-            loc=self.mu, covariance_matrix=torch.diag(self.sigma)
-        )
+        self.dist = torch.distributions.MultivariateNormal(loc=self.mu, covariance_matrix=torch.diag(self.sigma))
 
 
 class GaussianSource(CoupledSourceDistribution):
@@ -112,8 +113,7 @@ class GaussianSource(CoupledSourceDistribution):
         """
         mu = torch.as_tensor(mu)
         Sigma = torch.as_tensor(Sigma)
-        assert Sigma.shape == (data_dim, data_dim), \
-            f"Sigma has wrong shape {Sigma.shape}"
+        assert Sigma.shape == (data_dim, data_dim), f"Sigma has wrong shape {Sigma.shape}"
         self.data_dim = data_dim
         self.dist = torch.distributions.MultivariateNormal(mu, Sigma)
 
@@ -141,10 +141,8 @@ class MixtureOfGaussians(CoupledSourceDistribution):
         assert pis.shape == (self.K,), f"pis has wrong shape {pis.shape}"
         assert all(0 <= pi <= 1 for pi in pis), "all pis must be between 0 and 1"
         assert sum(pis) == 1, "pis must sum to 1"
-        comp = torch.distributions.Independent(
-            torch.distributions.Normal(mus, sigmas), 1
-        )
-        self.dist = torch.distributions.MixtureSameFamily(mix, comp)  
+        comp = torch.distributions.Independent(torch.distributions.Normal(mus, sigmas), 1)
+        self.dist = torch.distributions.MixtureSameFamily(mix, comp)
 
 
 class BetaSource(SourceDistribution):
@@ -156,7 +154,6 @@ class BetaSource(SourceDistribution):
         self.beta = beta
         self.data_dim = data_dim
         self.dist = torch.distributions.Beta(alpha, beta)
-
 
 
 class CauchySource(SourceDistribution):
@@ -260,7 +257,7 @@ class LaplaceSource(SourceDistribution):
 
 
 class LogNormalSource(SourceDistribution):
-    def __init__(self, loc: float, scale: float, data_dim: int = 2,     **kwargs):
+    def __init__(self, loc: float, scale: float, data_dim: int = 2, **kwargs):
         """Describes the distribution of the logarithm of a random variable.
         Useful for modeling quantities that are strictly positive."""
         self.data_dim = data_dim
@@ -275,7 +272,7 @@ class LowRankMultivariateNormalSource(CoupledSourceDistribution):
         self.data_dim = data_dim
         self.loc = torch.as_tensor(loc)
         self.cov_factor = torch.as_tensor(cov_factor)
-        self.cov_diag = torch.as_tensor(cov_diag)   
+        self.cov_diag = torch.as_tensor(cov_diag)
         self.dist = torch.distributions.LowRankMultivariateNormal(self.loc, self.cov_factor, self.cov_diag)
 
 
@@ -287,12 +284,15 @@ class MultivariateNormalSource(CoupledSourceDistribution):
         self.data_dim = data_dim
         self.loc = torch.as_tensor(loc)
         covariance_matrix = torch.as_tensor(covariance_matrix)
-        assert covariance_matrix.shape == (data_dim, data_dim), f"Covariance matrix has wrong shape {covariance_matrix.shape}"
+        assert covariance_matrix.shape == (
+            data_dim,
+            data_dim,
+        ), f"Covariance matrix has wrong shape {covariance_matrix.shape}"
         self.dist = torch.distributions.MultivariateNormal(self.loc, covariance_matrix)
 
 
 class NormalSource(SourceDistribution):
-    def __init__(self, loc: float, scale: float, data_dim: int = 2,     **kwargs):
+    def __init__(self, loc: float, scale: float, data_dim: int = 2, **kwargs):
         """Describes Gaussian distribution with mean=loc and std=scale,
         where all dimensions are uncorrelated and have the same mean and variance."""
         self.data_dim = data_dim
@@ -316,12 +316,10 @@ class RelaxedBernoulliSource(SourceDistribution):
         self.temperature = torch.as_tensor(temperature)
         assert self.logits.shape == (data_dim,), f"Logits have wrong shape {self.logits.shape}"
         # assert self.temperature.shape == (data_dim,), f"Temperature has wrong shape {self.temperature.shape}"
-        self.dist = torch.distributions.RelaxedBernoulli(
-            temperature=self.temperature, logits=self.logits
-        )
+        self.dist = torch.distributions.RelaxedBernoulli(temperature=self.temperature, logits=self.logits)
 
     def sample(self, nsamples: int | tuple) -> Tensor:
-        return self.dist.sample((nsamples, ))
+        return self.dist.sample((nsamples,))
 
 
 class StudentTSource(SourceDistribution):
