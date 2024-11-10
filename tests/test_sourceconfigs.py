@@ -6,7 +6,7 @@ import os
 from sfm.distributions import get_source_distribution
 
 
-def test_source_configs(n_samples=1000):
+def test_source_configs(n_samples=1000, dmin=-1, dmax=1, atol=0.2):
 
     # loop over src/sfm/config/source/
     currentfile = os.path.abspath(__file__)
@@ -31,8 +31,22 @@ def test_source_configs(n_samples=1000):
             # samples = torch.randn(n_samples, 2)
             log_prob = dist.log_prob(samples)
             assert log_prob.shape == (n_samples,), f"\n Log-probability of {fname} has wrong shape {log_prob.shape}"
-
             print(" ✅")
+
+            minx = samples[:, 0].min()
+            maxx = samples[:, 0].max()
+            miny = samples[:, 1].min()
+            maxy = samples[:, 1].max()
+            print(f" minx={minx:.2f}, maxx={maxx:.2f}, miny={miny:.2f}, maxy={maxy:.2f}", end="")
+            # if within +-atol% of dmin or dmax, then it's ok
+            if (minx >= dmin - atol) \
+            and (maxx <= dmax + atol) \
+            and (miny >= dmin - atol) \
+            and (maxy <= dmax + atol):
+                print(" ✅")
+            else:
+                print(" ❌")
+
 
     print("\nAll tests passed ✅")
 

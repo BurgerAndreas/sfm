@@ -3,5 +3,5 @@
 source: 
   concentration: 1.0
   loc: 0.0
-  type: vonmises
+  trgt: vonmises
   

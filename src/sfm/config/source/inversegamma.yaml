@@ -3,5 +3,5 @@
 source: 
   concentration: 2.0
   rate: 2.0
-  type: inversegamma
+  trgt: inversegamma
   

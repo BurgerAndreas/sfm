@@ -2,5 +2,5 @@
 
 source: 
   df: 5.0
-  type: chi2
+  trgt: chi2
   

@@ -3,5 +3,5 @@
 source: 
   loc: 0.0
   scale: 1.0
-  type: lognormal
+  trgt: lognormal
   

@@ -3,5 +3,5 @@
 source: 
   alpha: 2.0
   scale: 1.0
-  type: pareto
+  trgt: pareto
   

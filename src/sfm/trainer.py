@@ -32,17 +32,34 @@ from sfm.flowmodel import (
 
 from sfm.distributions import get_source_distribution
 
+def norm_data_01(data):
+    # make sure data is inside [0, 1]
+    # using max and min along each dimension
+    # shape is (n_samples, 2)
+    data[:, 0] = (data[:, 0] - data[:, 0].min()) / (data[:, 0].max() - data[:, 0].min())
+    data[:, 1] = (data[:, 1] - data[:, 1].min()) / (data[:, 1].max() - data[:, 1].min())
+    return data
 
-def get_dataset(n_samples: int, dataset: str = "moons", datanoise: float = 0.05, **kwargs):
-    if dataset == "moons":
-        # data is R^2 -> R
-        data, _ = make_moons(n_samples, noise=datanoise)
+def norm_data_pm1(data):
+    # make sure data is inside [-1, 1]
+    # using max and min along each dimension
+    # shape is (n_samples, 2)
+    norm_data_01(data)
+    data[:, 0] = data[:, 0] * 2 - 1
+    data[:, 1] = data[:, 1] * 2 - 1
+    return data
+
+def get_dataset(n_samples: int, trgt: str = "moons", noise: float = 0.05, **kwargs):
+    # https://scikit-learn.org/dev/api/sklearn.datasets.html#sample-generators
+    if trgt == "moons":
+        data, _ = make_moons(n_samples, noise=noise)
         data = torch.from_numpy(data).float()
-    elif dataset == "circles":
-        data, _ = make_circles(n_samples, noise=datanoise)
+    elif trgt == "circles":
+        data, _ = make_circles(n_samples, noise=noise)
         data = torch.from_numpy(data).float()
     else:
-        raise ValueError(f"Unknown dataset: {dataset}")
+        raise ValueError(f"Unknown dataset: {trgt}")
+    norm_data_01(data)
     return data
 
 
@@ -74,7 +91,7 @@ def get_lr_schedule(optimizer, cfg: Dict):
 class Trainer:
     def __init__(self, cfg: Dict):
         self.cfg = cfg
-        self.fnamebase = f"{cfg['dataset']}_{cfg['source']['type']}_{cfg['fmloss']}_{cfg['n_ode']}"
+        self.fnamebase = f"{cfg['data']['trgt']}_{cfg['source']['trgt']}_{cfg['fmloss']}_{cfg['n_ode']}"
 
         self.cfg = self.init_logging(cfg)
         self.device = torch.device("cuda" if torch.cuda.is_available() and not cfg["force_cpu"] else "cpu")
@@ -96,8 +113,7 @@ class Trainer:
         self.data: torch.Tensor = get_dataset(
             # 20% extra for validation set
             int(cfg["n_samples"] * 1.2),
-            cfg["dataset"],
-            cfg["datanoise"],
+            **cfg["data"],
         )
         self.data_train = self.data[: cfg["n_samples"]]
         self.data_val = self.data[cfg["n_samples"] :]

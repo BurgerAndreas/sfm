@@ -2,5 +2,5 @@
 
 source: 
   rate: 0.5
-  type: exponential
+  trgt: exponential
   

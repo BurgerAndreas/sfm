@@ -3,5 +3,5 @@
 source: 
   logits: [0.0, 2.0]
   temperature: 1.0
-  type: relaxedbernoulli
+  trgt: relaxedbernoulli
   

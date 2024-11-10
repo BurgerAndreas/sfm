@@ -3,5 +3,5 @@
 source: 
   Sigma: [[1.0, 0.5], [0.5, 1.0]]
   mu: [0.0, 0.0]
-  type: gaussian
+  trgt: gaussian
   

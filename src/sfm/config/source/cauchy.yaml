@@ -2,6 +2,6 @@
 
 source: 
   loc: 0.0
-  scale: 1.0
-  type: cauchy
+  scale: 0.2
+  trgt: cauchy
   

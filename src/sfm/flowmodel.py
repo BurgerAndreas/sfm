@@ -82,11 +82,11 @@ class ContNormFlow(nn.Module):
     
     def set_fmtime(self, fmtime: bool):
         if fmtime:
-            self.tdata = 1.0
-            self.tnoise = 0.0
+            self.tdata = torch.tensor(1.0)
+            self.tnoise = torch.tensor(0.0)
         else:
-            self.tdata = 0.0
-            self.tnoise = 1.0
+            self.tdata = torch.tensor(0.0)
+            self.tnoise = torch.tensor(1.0)
 
     def forward(self, t: Tensor, x: Tensor, y: Tensor = None) -> Tensor:
         # Forward pass through the MLP network to model the vector field

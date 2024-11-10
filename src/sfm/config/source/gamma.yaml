@@ -1,7 +1,7 @@
 # @package _global_
 
 source: 
-  concentration: 2.0
+  concentration: 1.0
   rate: 2.0
-  type: gamma
+  trgt: gamma
   

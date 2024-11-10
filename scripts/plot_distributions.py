@@ -3,56 +3,24 @@ import torch
 import numpy as np
 import yaml
 import os
+import omegaconf
 
 # Import your distributions
 from sfm.distributions import get_source_distribution
 
-# Define the distributions and their parameters
-distributions = {
-    "normal": {"type": "normal"},
-    "gaussian": {"type": "gaussian", "mu": torch.tensor([0.0, 0.0]), "Sigma": torch.tensor([[1.0, 0.5], [0.5, 1.0]])},
-    "isotropic": {"type": "isotropic", "mu": torch.tensor([2.0, 1.0]), "sigma": 0.5},
-    "diagonal": {"type": "diagonal", "mu": torch.tensor([0.0, 0.0]), "sigma": torch.tensor([1.0, 0.5])},
-    "beta": {"type": "beta", "alpha": 2.0, "beta": 2.0},
-    "mog": {
-        "type": "mog",
-        "mus": torch.tensor([[0.0, 0.0], [5.0, 5.0]]),
-        "sigmas": torch.tensor([[1.0, 1.0], [1.0, 1.0]]),
-        "pis": torch.tensor([0.5, 0.5]),
-    },
-    "cauchy": {"type": "cauchy", "loc": 0.0, "scale": 1.0},
-    "chi2": {"type": "chi2", "df": 5.0},
-    "dirichlet": {"type": "dirichlet", "concentration": torch.tensor([1.0, 2.0])},
-    "exponential": {"type": "exponential", "rate": 0.5},
-    "fisher": {"type": "fisher", "df1": 5.0, "df2": 10.0},
-    "gamma": {"type": "gamma", "concentration": 2.0, "rate": 2.0},
-    "gumbel": {"type": "gumbel", "loc": 0.0, "scale": 1.0},
-    "halfcauchy": {"type": "halfcauchy", "scale": 1.0},
-    "halfnormal": {"type": "halfnormal", "scale": 1.0},
-    "inversegamma": {"type": "inversegamma", "concentration": 2.0, "rate": 2.0},
-    "kumaraswamy": {"type": "kumaraswamy", "a": 2.0, "b": 2.0},
-    "laplace": {"type": "laplace", "loc": 0.0, "scale": 1.0},
-    "lognormal": {"type": "lognormal", "loc": 0.0, "scale": 1.0},
-    "lowrank": {
-        "type": "lowrank",
-        "loc": torch.tensor([0.0, 0.0]),
-        "cov_factor": torch.tensor([[1.0, 0.5], [0.5, 1.0]]),
-        "cov_diag": torch.tensor([1.0, 1.0]),
-    },
-    "multivariate": {
-        "type": "multivariate",
-        "loc": torch.tensor([0.0, 0.0]),
-        "covariance_matrix": torch.tensor([[1.0, 0.5], [0.5, 1.0]]),
-    },
-    "pareto": {"type": "pareto", "scale": 1.0, "alpha": 2.0},
-    "relaxedbernoulli": {"type": "relaxedbernoulli", "logits": torch.tensor([0.0, 2.0]), "temperature": 1.0},
-    "studentt": {"type": "studentt", "df": 5.0, "loc": 0.0, "scale": 1.0},
-    "vonmises": {"type": "vonmises", "loc": 0.0, "concentration": 1.0},
-    "weibull": {"type": "weibull", "scale": 1.0, "concentration": 2.0},
-}
-
-
 if __name__ == "__main__":
+    # load distributions from yaml files 
+    currentfile = os.path.abspath(__file__)
+    currentdir = os.path.dirname(currentfile)
+    source_dir = os.path.abspath(f"{currentdir}/../src/sfm/config/source/")
+
+    distributions = {}
+    for fname in os.listdir(source_dir):
+        with open(f"{source_dir}/{fname}", "r") as f:
+            cfg = omegaconf.OmegaConf.load(f)
+            name = os.path.splitext(fname)[0].replace(".yaml", "")
+            distributions[name] = cfg["source"]
+
     n_samples = 1000
 
     # Plot and save each distribution

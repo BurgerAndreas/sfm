@@ -37,9 +37,9 @@ def run_with_hydra(args: DictConfig) -> None:
     print(f"Saved logprobs plot to\n {fname}")
 
     # Plot the training and validation distributions
-    fname, fig = trainer.plot_data(x=trainer.data_train, step=0, folder="plots/data", fname=f"{cfg['dataset']}_train.png")
+    fname, fig = trainer.plot_data(x=trainer.data_train, step=0, folder="plots/data", fname=f"{cfg['data']['trgt']}_train.png")
     print(f"Saved training data plot to\n {fname}")
-    fname, fig = trainer.plot_data(x=trainer.data_val, step=0, folder="plots/data", fname=f"{cfg['dataset']}_val.png")
+    fname, fig = trainer.plot_data(x=trainer.data_val, step=0, folder="plots/data", fname=f"{cfg['data']['trgt']}_val.png")
     print(f"Saved validation data plot to\n {fname}")
 
     print(

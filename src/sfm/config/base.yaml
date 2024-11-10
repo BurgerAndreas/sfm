@@ -5,6 +5,7 @@
 defaults:
   # - ./source.normal
   - source: normal
+  - data: moons
   - _self_
 
 # dataset
@@ -12,8 +13,6 @@ datadim: 2
 batch_size: 256
 n_samples: 16384
 n_trainsteps: 16384
-dataset: moons
-datanoise: 0.05
 
 optim:
   lr: 1e-3

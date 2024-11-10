@@ -1,0 +1,5 @@
+# @package _global_
+
+data:
+  trgt: circles
+  noise: 0.05

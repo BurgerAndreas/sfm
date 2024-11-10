@@ -1,0 +1,5 @@
+# @package _global_
+
+data:
+  trgt: moons
+  noise: 0.05

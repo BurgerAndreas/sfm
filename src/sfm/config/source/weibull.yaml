@@ -3,5 +3,5 @@
 source: 
   concentration: 2.0
   scale: 1.0
-  type: weibull
+  trgt: weibull
   

@@ -64,10 +64,10 @@ class UniformSource(SourceDistribution):
 
 
 class StandardNormalSource(SourceDistribution):
-    def __init__(self, data_dim: int = 2, **kwargs):
+    def __init__(self, data_dim: int = 2, mean:float = 0, std: float = 0.3, **kwargs):
         """Mean=0, std=1"""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Normal(0, 1)
+        self.dist = torch.distributions.Normal(mean, std)
 
     # def log_prob(self, x: Tensor) -> Tensor:
     #     return self.dist.log_prob(x).sum(dim=-1)
@@ -380,6 +380,6 @@ _distributions = {
 }
 
 
-def get_source_distribution(type: str = "gaussian", **kwargs):
-    assert type in _distributions, f"Unknown source distribution: {type}.\n Try one of {list(_distributions.keys())}"
-    return _distributions[type.lower()](**kwargs)
+def get_source_distribution(trgt: str = "gaussian", **kwargs):
+    assert trgt in _distributions, f"Unknown source distribution: {trgt}.\n Try one of {list(_distributions.keys())}"
+    return _distributions[trgt.lower()](**kwargs)

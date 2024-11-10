@@ -1,8 +1,8 @@
 # @package _global_
 
 source: 
-  df: 5.0
+  df: 10.0
   loc: 0.0
-  scale: 1.0
-  type: studentt
+  scale: 0.2
+  trgt: studentt
   
