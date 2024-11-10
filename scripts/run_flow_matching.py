@@ -12,11 +12,10 @@ In the Flow Matching paper the authors reverse it, but we use the score-based co
 
 @hydra.main(config_name="base", config_path="../src/sfm/config", version_base="1.3")
 def run_with_hydra(args: DictConfig) -> None:
-    # to dict
-    cfg = OmegaConf.structured(OmegaConf.to_yaml(args))
+    print("-"*80)
 
     # Training
-    trainer = Trainer(cfg)
+    trainer = Trainer(args)
     losses, log_probs = trainer.train()
 
     # Final evaluation

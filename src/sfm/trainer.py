@@ -90,7 +90,7 @@ def get_lr_schedule(optimizer, cfg: Dict):
 
 class Trainer:
     def __init__(self, cfg: Dict):
-        self.cfg = cfg
+        # self.cfg = cfg
         self.fnamebase = f"{cfg['data']['trgt']}_{cfg['source']['trgt']}_{cfg['fmloss']}_{cfg['n_ode']}"
 
         self.cfg = self.init_logging(cfg)
@@ -193,12 +193,14 @@ class Trainer:
         return gen_targets, log_p
 
     def init_logging(self, cfg: Dict):
+        # logging to cloud service
+        self.logger = get_logger(cfg)
+        # to dict
+        cfg = OmegaConf.structured(OmegaConf.to_yaml(cfg))
         # logging to file
         logdir = f"logs/{self.fnamebase}"
         os.makedirs(logdir, exist_ok=True)
         cfg["logdir"] = logdir
-        # logging to cloud service
-        self.logger = get_logger(cfg)
         self.logger.logdir = logdir
         self.logdir = logdir
         return cfg

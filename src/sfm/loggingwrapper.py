@@ -107,8 +107,8 @@ def name_from_config(args: omegaconf.DictConfig) -> str:
     """Generate a name for the model based on the config.
     Name is intended to be used as a file name for saving checkpoints and outputs.
     """
-    IGNORE_OVERRIDES = []
-    REPLACE = {}
+    IGNORE_OVERRIDES = ["logger"]
+    REPLACE = {"fmloss-": "", "source-": ""}
     try:
         # model name format:
         # deq_dot_product_attention_transformer_exp_l2_md17
@@ -117,12 +117,12 @@ def name_from_config(args: omegaconf.DictConfig) -> str:
         # override format: 'pretrain_dataset=bridge,steps=10,use_wandb=False'
         override_names = ""
         # print(f'Overrides: {args.override_dirname}')
-        if args.override_dirname:
-            for arg in args.override_dirname.split(","):
+        if args['override_dirname']:
+            for ar in args['override_dirname'].split(","):
                 # make sure we ignore some overrides
-                if np.any([ignore in arg for ignore in IGNORE_OVERRIDES]):
+                if np.any([ignore in ar for ignore in IGNORE_OVERRIDES]):
                     continue
-                override = arg.replace("+", "").replace("_", "")
+                override = ar.replace("+", "").replace("_", "")
                 override = override.replace("=", "-").replace(".", "")
                 # override = override.replace("deqkwargstest", "")
                 override = override.replace("deqkwargs", "").replace("model", "")
@@ -140,8 +140,9 @@ def name_from_config(args: omegaconf.DictConfig) -> str:
     return _name
 
 
-def get_logger(args):
+def get_logger(args: omegaconf.DictConfig):
     runname = name_from_config(args)
+    args = OmegaConf.structured(OmegaConf.to_yaml(args))
     if args.logger == "wandb":
         return WandbWrapper(args, runname)
     elif args.logger == "neptune":

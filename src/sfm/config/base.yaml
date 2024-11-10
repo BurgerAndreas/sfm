@@ -42,7 +42,7 @@ tags: null
 logfreq: 100
 evalfreq: 3000
 
-wandb_run_name: fm
+wandb_run_name: FM
 # variables we can access in our code
 job_name: 'results'
 # job_name: ${hydra:job.name}
