@@ -36,16 +36,16 @@ def run_with_hydra(args: DictConfig) -> None:
     print(f"Saved logprobs plot to\n {fname}")
 
     # Plot the training and validation distributions
-    fname, fig = trainer.plot_data(x=trainer.data_train, step=0, folder="plots/data", fname=f"{cfg['data']['trgt']}_train.png")
+    fname, fig = trainer.plot_data(x=trainer.data_train, step=0, folder="plots/data", fname=f"{args['data']['trgt']}_train.png")
     print(f"Saved training data plot to\n {fname}")
-    fname, fig = trainer.plot_data(x=trainer.data_val, step=0, folder="plots/data", fname=f"{cfg['data']['trgt']}_val.png")
+    fname, fig = trainer.plot_data(x=trainer.data_val, step=0, folder="plots/data", fname=f"{args['data']['trgt']}_val.png")
     print(f"Saved validation data plot to\n {fname}")
 
     print(
         f"Log probability: {log_p.nanmean():.2f} ± {torch.std(log_p[~log_p.isnan()]):.2f}" 
         f"(default: -0.5 ± 0.7)"
     )
-    print(f"Loss after {cfg['n_samples']} n_samples: {losses[-1]:.3f}")
+    print(f"Loss after {args['n_samples']} n_samples: {losses[-1]:.3f}")
 
     trainer.finalize()
     print("\nDone ✅")

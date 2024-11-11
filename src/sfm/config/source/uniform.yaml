@@ -1,0 +1,6 @@
+# @package _global_
+
+source: 
+  low: -1.0
+  high: 1.0
+  trgt: uniform

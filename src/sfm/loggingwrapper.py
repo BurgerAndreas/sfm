@@ -6,6 +6,7 @@ from omegaconf import OmegaConf
 import numpy as np
 import torch
 
+PROJECT = "sfm"
 
 class LoggingWrapper:
     def __init__(self, args, runname):
@@ -25,7 +26,7 @@ class WandbWrapper(LoggingWrapper):
     def __init__(self, args, runname):
         wandb.require("core")
         self.run = wandb.init(
-            project="fm-source",
+            project=PROJECT,
             name=runname,
             config=OmegaConf.to_container(args, resolve=True),
         )
@@ -49,7 +50,7 @@ class NeptuneWrapper(LoggingWrapper):
     def __init__(self, args, runname):
         args_dict = OmegaConf.to_container(args, resolve=True)
         self.run = neptune.init_run(
-            project="burgerandreas/fm-source",
+            project="burgerandreas/" + PROJECT,
             name=runname,
             capture_stderr=True,
             capture_stdout=True,
@@ -107,13 +108,13 @@ def name_from_config(args: omegaconf.DictConfig) -> str:
     """Generate a name for the model based on the config.
     Name is intended to be used as a file name for saving checkpoints and outputs.
     """
-    IGNORE_OVERRIDES = ["logger"]
-    REPLACE = {"fmloss-": "", "source-": ""}
+    IGNORE_OVERRIDES = ["logger", "fmloss"]
+    REPLACE = {"source-": ""}
     try:
         # model name format:
         # deq_dot_product_attention_transformer_exp_l2_md17
         # deq_graph_attention_transformer_nonlinear_l2_md17
-        mname = args["wandb_run_name"]
+        mname = args["fmloss"].upper()
         # override format: 'pretrain_dataset=bridge,steps=10,use_wandb=False'
         override_names = ""
         # print(f'Overrides: {args.override_dirname}')

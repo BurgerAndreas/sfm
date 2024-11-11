@@ -27,7 +27,7 @@ Try different source distributions:
 ```bash
 # python scripts/run_flow_matching.py fmloss=cfm source=normal logger=neptune
 
-sources=("normal" "beta" "laplace" "mog" "cauchy" "fisher" "studentt" "weibull" "gamma" "laplace" "gumbel")
+sources=("normal" "uniform" "beta" "laplace" "mog" "cauchy" "fisher" "studentt" "weibull" "gamma" "laplace" "gumbel")
 losses=("cfm" "otcfm")
 for source in "${sources[@]}"; do
     for loss in "${losses[@]}"; do

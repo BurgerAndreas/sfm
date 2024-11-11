@@ -58,7 +58,7 @@ class CoupledSourceDistribution(SourceDistribution):
 
 
 class UniformSource(SourceDistribution):
-    def __init__(self, low: float = 0.0, high: float = 1.0, data_dim: int = 2, **kwargs):
+    def __init__(self, low: float = -1.0, high: float = 1.0, data_dim: int = 2, **kwargs):
         super().__init__(data_dim, **kwargs)
         self.dist = torch.distributions.Uniform(low, high)
 
@@ -351,6 +351,7 @@ class WeibullSource(SourceDistribution):
 
 
 _distributions = {
+    "uniform": UniformSource,
     "normal": StandardNormalSource,
     "gaussian": GaussianSource,
     "isotropic": IsotropicGaussianSource,
