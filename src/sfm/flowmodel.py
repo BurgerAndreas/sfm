@@ -4,7 +4,7 @@ import torch.nn as nn
 
 import sklearn
 from torch import Tensor
-from typing import *
+from typing import List, Tuple, Dict
 from zuko.utils import odeint as zuko_odeint
 from torchdyn.core import NeuralODE
 
@@ -13,43 +13,6 @@ from torchcfm.conditional_flow_matching import (
     TargetConditionalFlowMatcher,
     ExactOptimalTransportConditionalFlowMatcher,
 )
-
-
-# Simple MLP architecture for the neural network modeling the vector field
-class MLPwithTimeEmbedding(nn.Sequential):
-    def __init__(
-        self,
-        in_features: int = 2,
-        out_features: int = 2,
-        freqs: int = 3,
-        hidden_features: List[int] = [64, 64, 64],
-        time_varying: bool = True,
-        device: str = "cpu",
-    ):
-        # "positional encoding" or "time embedding" and allows the network to adjust its behavior with respect to t
-        # with more granularity than by simply giving it as input the time t.
-        # part of the module's state but not a parameter
-
-        in_features += 2 * freqs
-
-        layers = []
-        for a, b in zip(
-            (in_features, *hidden_features),
-            (*hidden_features, out_features),
-        ):
-            layers.extend([nn.Linear(a, b), nn.ELU()])
-        super().__init__(*layers[:-1])
-
-        self.register_buffer("freqs", torch.arange(1, freqs + 1, device=device) * torch.pi)
-
-    def forward(self, t: Tensor, x: Tensor = None, *args, **kwargs) -> Tensor:
-        # Encode time with sinusoidal features to capture periodicity
-        # t: [B] -> [B, 1]
-        t = self.freqs * t[..., None].to(self.freqs.device)  # [B, f]
-        t = torch.cat((t.cos(), t.sin()), dim=-1)  # [B, 2f]
-        t = t.expand(*x.shape[:-1], -1)  # [B, 2f]
-        x = torch.cat((t, x), dim=-1)  # [B, D+2f]
-        return super().forward(x)
 
 
 # Continuous Normalizing Flow (ContNormFlow) class

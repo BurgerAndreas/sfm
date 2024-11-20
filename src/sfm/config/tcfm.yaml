@@ -1,0 +1,47 @@
+# @package _global_
+# this @package directive solves any nesting problem (if this file is included in another folder)
+
+# use source/normal.yaml
+defaults:
+  # - ./source.normal
+  - source: normal # normal, 8gaussian
+  - data: moons
+  - _self_
+
+task: train # train, gif
+
+model:
+  trgt: mlp
+  time_varying: true # MLP
+  freqs: 3 # MLP with time embedding
+
+n_trainsteps: 10000
+batch_size: 256
+eval_batch_size: 1024
+
+use_slcf: true # True works better
+use_ot: true
+
+# computational
+force_cpu: false
+savedir: null
+cpname: "mysimplemlp"
+runname: null
+
+# log-prob, quiver (velocity field), trajectory
+doplot: [True, False, True]
+
+# logging
+logger: null # neptune, wandb
+tags: null
+logfreq: 100
+evalfreq: 3000
+seed: 42
+
+wandb_run_name: FM
+# variables we can access in our code
+job_name: 'results'
+# job_name: ${hydra:job.name}
+config_name: ${hydra:job.config_name}
+# Stores the command line arguments overrides
+override_dirname: ${hydra:job.override_dirname}

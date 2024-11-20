@@ -69,6 +69,7 @@ class NeptuneWrapper(LoggingWrapper):
         self.run["parameters"] = args_dict
 
     def log_safely(self, metrics: dict, step: int, split: str):
+        # prevents neptune from crashing on nan or inf values
         for key, value in metrics.items():
             if "log_p" in key:
                 print(f"=== log_p: {value}", type(value))

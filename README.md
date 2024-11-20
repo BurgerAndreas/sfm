@@ -4,7 +4,14 @@ Based on [Francois Rozet's gist](https://gist.github.com/francois-rozet/fd6a820e
 and [TorchCFM](https://github.com/atong01/conditional-flow-matching)
 
 
-## Run
+## Run TorchCFM
+
+```bash
+mamba activate sfm
+python scripts/tcfm.py
+```
+
+## Run other flow matching losses
 
 ```bash
 mamba activate sfm
@@ -51,5 +58,12 @@ pip install torch==2.2.0+cu121 -f https://download.pytorch.org/whl/cu121/torch
 pip install torchvision==0.17.0+cu121 -f https://download.pytorch.org/whl/cu121/torchvision
 ```
 
+## TODO
+
+[] start from gaussian source
+[] two gaussians source / mog source
+
+- [] Measure Wasserstein distance between source and target
+- [] Select runs for loss/log_prob plots
 
 

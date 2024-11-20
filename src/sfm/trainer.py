@@ -15,13 +15,13 @@ from sklearn.datasets import make_moons, make_circles
 
 from torch import Tensor
 from tqdm import tqdm
-from typing import *
+from typing import List, Tuple, Dict
 from zuko.utils import odeint
+
 
 from sfm.loggingwrapper import get_logger
 from sfm.flowmodel import (
     ContNormFlow,
-    MLPwithTimeEmbedding,
     LipmanFMLoss,
     LipmanTCFMLoss,
     OTCFMLoss,
@@ -29,6 +29,8 @@ from sfm.flowmodel import (
     torchdyn_wrapper,
     NeuralODEWrapper,
 )
+
+from sfm.networks import MLPSepTimeEmb
 
 from sfm.distributions import get_source_distribution
 
@@ -97,7 +99,7 @@ class Trainer:
         self.device = torch.device("cuda" if torch.cuda.is_available() and not cfg["force_cpu"] else "cpu")
         torch.set_default_device(self.device)
 
-        model = MLPwithTimeEmbedding(**cfg["model"], device=self.device).to(self.device)
+        model = MLPSepTimeEmb(**cfg["model"], device=self.device).to(self.device)
         if cfg["n_ode"] == "zuko":
             self.flow = ContNormFlow(model=model, fmtime=cfg["fmtime"])
         elif cfg["n_ode"] == "torchdyn":
@@ -215,10 +217,16 @@ class Trainer:
         if isinstance(x, torch.Tensor):
             x = x.cpu().numpy()
 
-        assert x.shape[1] == self.cfg["datadim"], f"Expected (...,{self.cfg['datadim']}) dimensions, got {x.shape}"
+        assert x.shape[1] == self.cfg["datadim"], \
+            f"Expected (N,{self.cfg['datadim']}) dimensions, got {x.shape}"
 
         fig = plt.figure(figsize=(4.8, 4.8), dpi=150)
         plt.hist2d(*x.T, bins=64)
+        # remove axis ticks
+        plt.xticks([])
+        plt.yticks([])
+        plt.tight_layout(pad=0.0)
+        # save
         fname += f"_s{step}.png"
         if folder is None:
             folder = self.logdir
@@ -230,8 +238,10 @@ class Trainer:
     def plot_loss(self, losses, folder: str = None, fname: str = ""):
         fig = plt.figure(figsize=(4.8, 4.8), dpi=150)
         plt.plot(losses)
-        plt.xlabel("Epoch")
+        plt.xlabel("Step")
         plt.ylabel("Loss")
+        plt.tight_layout(pad=0.0)
+        # save
         fname += "_loss.png"
         if folder is None:
             folder = self.logdir

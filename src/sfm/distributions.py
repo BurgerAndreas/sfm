@@ -350,6 +350,53 @@ class WeibullSource(SourceDistribution):
         self.dist = torch.distributions.Weibull(scale, concentration)
 
 
+##############################################################################
+# "Data" distributions
+
+
+class EightGaussiansDistribution(SourceDistribution): 
+    def __init__(self, data_dim: int = 2, device: str = "cpu", scale: float = 5, var: float = 0.1, dtype: torch.dtype = torch.float32, **kwargs):
+        super().__init__(data_dim, device, **kwargs)
+        self.scale = scale
+        self.var = var
+        self.centers = torch.tensor([
+            (1, 0),
+            (-1, 0),
+            (0, 1),
+            (0, -1),
+            (1.0 / np.sqrt(2), 1.0 / np.sqrt(2)),
+            (1.0 / np.sqrt(2), -1.0 / np.sqrt(2)),
+            (-1.0 / np.sqrt(2), 1.0 / np.sqrt(2)),
+            (-1.0 / np.sqrt(2), -1.0 / np.sqrt(2)),
+        ], device=self.device, dtype=dtype) * self.scale
+
+    def log_prob(self, x: torch.Tensor) -> torch.Tensor:
+        centers = self.centers.T.reshape(1, 2, 8)
+        x = (x[:, :, None] - centers).mT
+        m = torch.distributions.multivariate_normal.MultivariateNormal(
+            loc=torch.zeros(x.shape[-1], device=self.device), 
+            covariance_matrix=math.sqrt(self.var) * torch.eye(x.shape[-1], device=self.device)
+        )
+        log_probs = m.log_prob(x)
+        log_probs = torch.logsumexp(log_probs, -1)
+        return log_probs
+
+    def sample(self, nsamples: int) -> torch.Tensor:
+        m = torch.distributions.multivariate_normal.MultivariateNormal(
+            loc=torch.zeros(self.data_dim, device=self.device), 
+            covariance_matrix=math.sqrt(self.var) * torch.eye(self.data_dim, device=self.device)
+        )
+        noise = m.sample((nsamples,))
+        multi = torch.multinomial(torch.ones(8, device=self.device), nsamples, replacement=True)
+        data = []
+        for i in range(nsamples):
+            data.append(self.centers[multi[i]] + noise[i])
+        data = torch.stack(data)
+        return data
+
+
+##############################################################################
+
 _distributions = {
     "uniform": UniformSource,
     "normal": StandardNormalSource,
@@ -378,8 +425,8 @@ _distributions = {
     "studentt": StudentTSource,
     "vonmises": VonMisesSource,
     "weibull": WeibullSource,
+    "8gaussian": EightGaussiansDistribution,
 }
-
 
 def get_source_distribution(trgt: str = "gaussian", **kwargs):
     assert trgt in _distributions, f"Unknown source distribution: {trgt}.\n Try one of {list(_distributions.keys())}"
