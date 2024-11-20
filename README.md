@@ -8,7 +8,12 @@ and [TorchCFM](https://github.com/atong01/conditional-flow-matching)
 
 ```bash
 mamba activate sfm
-python scripts/tcfm.py
+
+python scripts/tcfm.py task=train
+python scripts/tcfm.py task=gif
+
+python scripts/tcfm.py source=8gaussians task=train
+python scripts/tcfm.py source=8gaussians task=gif
 ```
 
 ## Run other flow matching losses

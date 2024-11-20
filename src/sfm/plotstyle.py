@@ -23,3 +23,7 @@ _cscheme = {
     "final": "#008080",
 }
 #b8dbd3 #f7e7b4 #68c4af #96ead7 #f2f6c3
+
+def set_plotstyle(style: str = "whitegrid") -> None:
+    sns.set_style(style)
+    sns.set_palette("pastel")

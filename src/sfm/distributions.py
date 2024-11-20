@@ -425,7 +425,7 @@ _distributions = {
     "studentt": StudentTSource,
     "vonmises": VonMisesSource,
     "weibull": WeibullSource,
-    "8gaussian": EightGaussiansDistribution,
+    "8gaussians": EightGaussiansDistribution,
 }
 
 def get_source_distribution(trgt: str = "gaussian", **kwargs):

@@ -134,7 +134,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
                     log_probs = sourcedist.log_prob(gridpoints)
             assert log_probs.shape == (points_real**2,), f"log_probs.shape: {log_probs.shape}"
             # print(f"Log-prob of sample: {sourcedist.log_prob(sample).mean().item()}")
-            tqdm.write(f"Log-prob of sample under model {i}: {log_probs.mean().item():0.2f}")
+            tqdm.write(f"Log-prob of sample under model: {log_probs.mean().item():0.2f}")
             log_probs = log_probs.reshape(Y.shape)
             ax = axis[iplot]
             ax.pcolormesh(X, Y, torch.exp(log_probs), vmax=1)
