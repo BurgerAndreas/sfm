@@ -104,7 +104,7 @@ class FlowMatchingLoss(nn.Module):
             y = (1 - (1 - 1e-4) * t) * z + (t * x)
             u = (1 - 1e-4) * z - x
 
-        return (self.v(t.squeeze(-1), y) - u).square().mean()
+        return (self.v(t.squeeze(-1), y) - u).square().nanmean()
 
 
 if __name__ == "__main__":
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     # Log-likelihood
     with torch.no_grad():
         log_p = flow.log_prob(data[:batch_size])
-        print(f"Log probability: {log_p.mean():.3f} ± {log_p.std():.3f}")
+        print(f"Log probability: {log_p.nanmean():.3f} ± {log_p.std():.3f}")
 
     # Training
     for epoch in tqdm(range(16384), ncols=44):
@@ -150,4 +150,4 @@ if __name__ == "__main__":
     # Log-likelihood
     with torch.no_grad():
         log_p = flow.log_prob(data[:batch_size])
-        print(f"Log probability: {log_p.mean():.3f} ± {log_p.std():.3f}")
+        print(f"Log probability: {log_p.nanmean():.3f} ± {log_p.std():.3f}")

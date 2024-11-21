@@ -46,7 +46,7 @@ def train_normalizing_flow(nf, train_loader, optimizer, epochs):
         for batch in train_loader:
             optimizer.zero_grad()
             log_likelihood = compute_log_likelihood(batch, nf)
-            loss = -log_likelihood.mean()  # Negative log-likelihood
+            loss = -log_likelihood.nanmean()  # Negative log-likelihood
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -114,11 +114,11 @@ def compute_precision_recall(real_data, generated_data, k=5):
 
     # Compute distances for precision
     distances_real, _ = nbrs_real.kneighbors(generated_data)
-    precision = np.mean(distances_real[:, -1])
+    precision = np.nanmean(distances_real[:, -1])
 
     # Compute distances for recall
     distances_generated, _ = nbrs_generated.kneighbors(real_data)
-    recall = np.mean(distances_generated[:, -1])
+    recall = np.nanmean(distances_generated[:, -1])
 
     return precision, recall
 

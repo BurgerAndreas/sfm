@@ -265,7 +265,7 @@ class LipmanFMLoss(nn.Module):
         # Target vector field u in Eq. (21) and Eq. (23)
         # loss = ||vt(ψt(x0)) − x1 − (1 − σmin)x0||
         u = (1 - self.sigma) * sources - targets
-        return (self.v(t.squeeze(-1), psi) - u).square().mean()
+        return (self.v(t.squeeze(-1), psi) - u).square().nanmean()
 
 
 class LipmanTCFMLoss(nn.Module):
@@ -288,7 +288,7 @@ class LipmanTCFMLoss(nn.Module):
         # vt = model(torch.cat([xt, t[:, None]], dim=-1))
         vt = self.v(t=t, x=xt, y=labels)
 
-        return torch.mean((vt - ut) ** 2)
+        return torch.nanmean((vt - ut) ** 2)
 
 
 class CFMLoss(LipmanTCFMLoss):

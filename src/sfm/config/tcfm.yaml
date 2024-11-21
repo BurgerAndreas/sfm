@@ -29,7 +29,7 @@ cpname: "mysimplemlp"
 runname: null
 
 # log-prob, quiver (velocity field), trajectory
-doplot: [True, False, True]
+doplot: [False, False, True]
 
 # logging
 logger: null # neptune, wandb

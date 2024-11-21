@@ -110,7 +110,7 @@ def train_cfm(args: DictConfig):
         )
         # vt = model(t, xt, y=None)
 
-        loss = torch.mean((vt - ut) ** 2)
+        loss = torch.nanmean((vt - ut) ** 2)
 
         loss.backward()
         # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -156,8 +156,8 @@ def train_cfm(args: DictConfig):
             )[-1].cpu()
             # Compute log probabilities
             log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
-            logprobs_train.append([k, log_probs.mean().item()])
-            print(f"Log-likelihood of test set: {log_probs.mean().item():0.3f}")
+            logprobs_train.append([k, log_probs.nanmean().item()])
+            print(f"Log-likelihood of test set: {log_probs.nanmean().item():0.3f}")
 
     # save model
     torch.save(model.state_dict(), f"{args.savedir}/{args.cpname}.pth")

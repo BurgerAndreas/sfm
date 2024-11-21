@@ -23,9 +23,12 @@ from torchcfm.utils import torch_wrapper
 
 from sfm.distributions import get_source_distribution
 from sfm.tcfmhelpers import CNF
-from sfm.plotstyle import _cscheme, set_plotstyle
+from sfm.plotstyle import _cscheme, set_seaborn_style
 
 PLOT_DIR_SOURCE = "plots/sources"
+
+def set_seaborn_style(*args, **kwargs):
+    pass
 
 def plot_inference_sidebyside(args: DictConfig) -> None:
     w = 7 # plot limits
@@ -74,7 +77,7 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     os.makedirs(PLOT_DIR_SOURCE, exist_ok=True)
     
     # plot sample
-    set_plotstyle()
+    set_seaborn_style()
     plt.scatter(sample[:, 0], sample[:, 1], s=1, alpha=0.5)
     plt.tight_layout(pad=0.0)
     fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_scatter.png"
@@ -83,14 +86,11 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     plt.close()
     
     # plot sample as 2d histogram
-    set_plotstyle()
+    set_seaborn_style()
     cmap = "coolwarm"
     # cmap = sns.color_palette("Spectral", as_cmap=True)
     # plt.hist2d(
     #     sample[:, 0].numpy(), sample[:, 1].numpy(), bins=100, cmap=cmap
-    # )
-    # sns.kdeplot(
-    #     x=sample[:, 0].numpy(), y=sample[:, 1].numpy(), cmap=cmap, fill=True
     # )
     sns.histplot(
         x=sample[:, 0].numpy(), y=sample[:, 1].numpy(), cmap=cmap, fill=True,
@@ -102,6 +102,17 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     print(f"Saved hist2d to\n {fname}")
     plt.close()
     
+    # KDE plot
+    sns.kdeplot(
+        x=sample[:, 0].numpy(), y=sample[:, 1].numpy(), cmap=cmap, fill=True
+    )
+    plt.tight_layout(pad=0.0)
+    fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_kde.png"
+    plt.savefig(fname, dpi=40)
+    print(f"Saved kde to\n {fname}")
+    plt.close()
+    
+    
     ts = torch.linspace(0, 1, n_t_gif) # [n_t_gif]
     
     # compute trajectory once, later pick time slices for gif
@@ -109,7 +120,7 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     # with torch.no_grad():
     # [n_t_gif, n_samples, 2]
     traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
-    set_plotstyle()
+    set_seaborn_style()
     n_plots = 1
     for i, t in tqdm(enumerate(ts)):
         fig, axes = plt.subplots(n_plots, n_models, figsize=(6 * n_models, 6 * n_plots))
@@ -137,16 +148,25 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
                 # log_probs = log_8gaussian_density(gridpoints)
                 log_probs = sourcedist.log_prob(gridpoints)
         assert log_probs.shape == (points_real**2,), f"log_probs.shape: {log_probs.shape}"
-        # print(f"Log-prob of sample: {sourcedist.log_prob(sample).mean().item()}")
-        # tqdm.write(f"Log-prob of sample under model: {log_probs.mean().item():0.2f}")
+        # print(f"Log-prob of sample: {sourcedist.log_prob(sample).nanmean().item()}")
+        # tqdm.write(f"Log-prob of sample under model: {log_probs.nanmean().item():0.2f}")
         log_probs = log_probs.reshape(Y.shape)
+        
+        # # Convert log probabilities to probabilities and normalize
+        # probs = torch.exp(log_probs)
+        # # Normalize to [0,1] for better visibility
+        # probs = (probs - probs.min()) / (probs.max() - probs.min())
+        
         ax = axis
         # viridis coolwarm BuPu PuRd magma inferno cividis prism ocean
         cmap = "viridis" 
         # cmap = sns.color_palette("Spectral", as_cmap=True)
         ax.pcolormesh(
-            X, Y, torch.exp(log_probs), vmax=1, cmap=cmap,
+            X, Y, torch.exp(log_probs), 
+            # vmax=1, 
+            cmap=cmap,
             # shading{'flat', 'nearest', 'gouraud', 'auto'}
+            shading='gouraud', norm='linear'
         )
         ax.set_xticks([])
         ax.set_yticks([])
@@ -165,15 +185,16 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     # create a new figure with subplots side by side
     n_plots = len(images)
     fig, axes = plt.subplots(1, n_plots, figsize=(6*n_plots, 6))
-    
     # plot each image
     for i, (ax, img) in enumerate(zip(axes, images)):
         ax.imshow(img)
         # remove border between plots
-        ax.axis("off")
+        # ax.axis("off")
         ax.set_xticks([])
         ax.set_yticks([]) 
-        ax.set_title(f"T={ts[i]:0.2f}")
+        # torn off minor ticks
+        ax.tick_params(axis='both', which='minor', length=0)
+        # ax.set_title(f"T={ts[i]:0.2f}")
     
     plt.tight_layout(pad=0.0)
     fname = f"{args.savedir}/{combinedplotname}_sidebyside.png"

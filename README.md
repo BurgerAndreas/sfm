@@ -9,10 +9,13 @@ and [ Alexander Tong and Kilian Fatras's TorchCFM](https://github.com/atong01/co
 ```bash
 mamba activate sfm
 
-sources = ("8gaussians" "dirichlet" "laplace" "gaussian" "normal" "uniform" "mog")
+sources=("8gaussians" "gamma" "laplace" "gaussian" "normal" "uniform" "mog")
+ots=(True False)
 
-for source in "${sources[@]}"; do
-    python scripts/tcfm.py source=${source} task=all
+for use_ot in "${ots[@]}"; do
+    for source in "${sources[@]}"; do
+        python scripts/tcfm.py source=${source} task=all use_ot=${use_ot}
+    done
 done
 ```
 
@@ -65,8 +68,6 @@ done
 
 ## TODO
 
-
-- [] load and plot loss curves
 
 - [] Measure Wasserstein distance between source and target
 

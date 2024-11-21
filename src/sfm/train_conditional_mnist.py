@@ -77,7 +77,7 @@ def train_conditional_mnist(args: DictConfig) -> None:
             else:
                 t, xt, ut = FM.sample_location_and_conditional_flow(x0, x1)
                 vt = model(t, xt, y)
-            loss = torch.mean((vt - ut) ** 2)
+            loss = torch.nanmean((vt - ut) ** 2)
             # Backprop
             loss.backward()
             optimizer.step()

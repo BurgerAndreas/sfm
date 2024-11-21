@@ -134,13 +134,13 @@ def plot_cfm_gif(args: DictConfig) -> None:
                     log_probs = sourcedist.log_prob(gridpoints)
             assert log_probs.shape == (points_real**2,), f"log_probs.shape: {log_probs.shape}"
             log_probs = log_probs.reshape(Y.shape)
-            ax = axis[iplot]
+            ax = axis[iplot] if n_plots > 1 else axis
             ax.pcolormesh(X, Y, torch.exp(log_probs), vmax=1)
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_xlim(-w, w)
             ax.set_ylim(-w, w)
-            ax.set_title(f"{args.runname}", fontsize=30)
+            # ax.set_title(f"{args.runname}", fontsize=20)
             iplot += 1
         
         ### Quiver plot
@@ -152,7 +152,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
                 ).to(device)
             )
             out = out.reshape([points_real_small, points_real_small, 2]).cpu().detach().numpy()
-            ax = axis[iplot]
+            ax = axis[iplot] if n_plots > 1 else axis
             ax.quiver(
                 X_small,
                 Y_small,
@@ -171,7 +171,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
 
         ### Trajectory plot
         if args.doplot[2]:
-            ax = axis[iplot]
+            ax = axis[iplot] if n_plots > 1 else axis
             ax.scatter(traj[:i, :, 0], traj[:i, :, 1], s=0.2, alpha=0.2, c=_cscheme["flow"])
             ax.scatter(traj[0, :, 0], traj[0, :, 1], s=10, alpha=0.8, c=_cscheme["prior"])
             ax.scatter(traj[i, :, 0], traj[i, :, 1], s=4, alpha=1, c=_cscheme["final"])
@@ -181,7 +181,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
             ax.set_ylim(-w, w)
             iplot += 1
         
-        plt.suptitle(f"{args['source']['trgt']} to Moons T={t:0.2f}", fontsize=40)
+        plt.tight_layout(pad=0.0)
+        # plt.suptitle(f"{args['source']['trgt']} to Moons T={t:0.2f}", fontsize=20)
         plt.savefig(f"{args.savedir}/trajectory/{tplotname}_{t:0.2f}.png", dpi=40)
         plt.close()
         # print(f"Saved figure to\n {args.savedir}/trajectory/{t:0.2f}.png")
