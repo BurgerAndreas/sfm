@@ -9,7 +9,7 @@ and [ Alexander Tong and Kilian Fatras's TorchCFM](https://github.com/atong01/co
 ```bash
 mamba activate sfm
 
-sources=("8gaussians" "gamma" "laplace" "gaussian" "normal" "uniform" "mog")
+sources=("8gaussians" "gamma" "dirichlet" "laplace" "gaussian" "normal" "uniform" "mog" "multivariate")
 ots=(True False)
 
 for use_ot in "${ots[@]}"; do

@@ -14,7 +14,6 @@ import torch
 from torch import Tensor
 import torchdyn
 from torchdyn.core import DEFunc, NeuralODE
-from torchdyn.datasets import generate_moons
 from torchdyn.nn import Augmenter
 
 from torchcfm.models.models import MLP, GradModel
@@ -27,7 +26,7 @@ from sfm.plotstyle import _cscheme
 PLOT_DIR_SOURCE = "plots/sources"
 
 def plot_cfm_gif(args: DictConfig) -> None:
-    w = 7 # plot limits
+    print(f"Plotting CFM gif for {args.runname}\n")
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if args.force_cpu:
@@ -56,12 +55,12 @@ def plot_cfm_gif(args: DictConfig) -> None:
     # log-prob plot
     points = 100j
     points_real = 100
-    Y, X = np.mgrid[-w:w:points, -w:w:points] # [points, points]
+    Y, X = np.mgrid[0:1:points, 0:1:points] # [points, points]
     gridpoints = torch.tensor(np.stack([X.flatten(), Y.flatten()], axis=1)).type(torch.float32) # [points**2, 2]
     # quiver plot
     points_small = 20j
     points_real_small = 20
-    Y_small, X_small = np.mgrid[-w:w:points_small, -w:w:points_small] # [points_small, points_small]
+    Y_small, X_small = np.mgrid[0:1:points_small, 0:1:points_small] # [points_small, points_small]
     gridpoints_small = torch.tensor(np.stack([X_small.flatten(), Y_small.flatten()], axis=1)).type(
         torch.float32
     )
@@ -138,8 +137,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
             ax.pcolormesh(X, Y, torch.exp(log_probs), vmax=1)
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_xlim(-w, w)
-            ax.set_ylim(-w, w)
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
             # ax.set_title(f"{args.runname}", fontsize=20)
             iplot += 1
         
@@ -166,7 +165,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
             )
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_xlim(-w, w)
+            ax.set_xlim(0, 1)
             iplot += 1
 
         ### Trajectory plot
@@ -177,8 +176,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
             ax.scatter(traj[i, :, 0], traj[i, :, 1], s=4, alpha=1, c=_cscheme["final"])
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_xlim(-w, w)
-            ax.set_ylim(-w, w)
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
             iplot += 1
         
         plt.tight_layout(pad=0.0)

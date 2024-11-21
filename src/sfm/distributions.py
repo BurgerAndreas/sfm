@@ -358,10 +358,11 @@ class WeibullSource(SourceDistribution):
 
 
 class EightGaussiansDistribution(SourceDistribution): 
-    def __init__(self, data_dim: int = 2, device: str = "cpu", scale: float = 5, var: float = 0.1, dtype: torch.dtype = torch.float32, **kwargs):
+    def __init__(self, data_dim: int = 2, device: str = "cpu", scale: float = 0.8, var: float = 0.001, dtype: torch.dtype = torch.float32, **kwargs):
         super().__init__(data_dim, device, **kwargs)
         self.scale = scale
-        self.var = var
+        # Scale variance proportionally to scale^2 to maintain relative spread
+        self.var = var * (scale ** 4)
         self.centers = torch.tensor([
             (1, 0),
             (-1, 0),

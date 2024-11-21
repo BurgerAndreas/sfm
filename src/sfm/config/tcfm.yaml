@@ -8,7 +8,7 @@ defaults:
   - data: moons
   - _self_
 
-task: train # train, gif
+task: all # all, train, gif, sidebyside
 
 model:
   trgt: mlp

@@ -38,7 +38,7 @@ def hydra_wrapper(args: DictConfig) -> None:
     if args.task in ["sidebyside", "all"]:
         plot_inference_sidebyside(args)
     
-    print("\n === Done! ===\n")
+    print(f"\n === Task '{args.task}' done ✅ ===\n")
 
 
 if __name__ == "__main__":

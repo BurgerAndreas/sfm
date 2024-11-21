@@ -11,8 +11,6 @@ import numpy as np
 import ot as pot
 import torch
 import torchdyn
-from torchdyn.core import NeuralODE
-from torchdyn.datasets import generate_moons
 import torchdiffeq
 import torchsde
 from torchvision import datasets, transforms
@@ -21,7 +19,6 @@ from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from torchdyn.core import DEFunc, NeuralODE
-from torchdyn.datasets import generate_moons
 from torchdyn.nn import Augmenter
 
 from torchcfm.utils import torch_wrapper
@@ -33,21 +30,23 @@ from torchcfm.conditional_flow_matching import ConditionalFlowMatcher
 from torchcfm.models.unet import UNetModel
 
 import torchcfm.models.models as tcfm_models
-from torchcfm.utils import sample_8gaussians, sample_moons, plot_trajectories, torch_wrapper
+from torchcfm.utils import plot_trajectories, torch_wrapper
 
 from torchcfm.optimal_transport import OTPlanSampler
 
 from sfm.networks import get_model
 from sfm.flowmodel import ContNormFlow
 from sfm.distributions import get_source_distribution
+from sfm.datasets import sample_dataset, get_dataset
 from sfm.tcfmhelpers import sample_conditional_pt, compute_conditional_vector_field
 from sfm.tcfmhelpers import CNF
 
 
 def train_cfm(args: DictConfig):
+    print(f"Training CFM for {args.runname}\n")
+    
     assert args.savedir not in ["", None, "None"], "savedir is required"
     os.makedirs(f"{args.savedir}/train", exist_ok=True)
-    print(f"Saving to {args.savedir}")
     
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -63,6 +62,7 @@ def train_cfm(args: DictConfig):
     tdata = 1 # data time
 
     sourcedist = get_source_distribution(**args.source)
+    trgtdist = get_dataset(**args.data)
     model = get_model(**args.model, dim=dim).to(device)
 
     optimizer = torch.optim.Adam(model.parameters())
@@ -89,7 +89,8 @@ def train_cfm(args: DictConfig):
         x0 = sourcedist.sample(args.batch_size).to(device)
         assert x0.shape == (args.batch_size, dim)
         # sample target distribution [B, D]
-        x1 = sample_moons(args.batch_size).to(device)
+        # x1 = sample_moons(args.batch_size).to(device)
+        x1 = trgtdist.sample(args.batch_size).to(device)
 
         # Draw samples from OT plan
         # only difference between ConditionalFlowMatcher and ExactOptimalTransportConditionalFlowMatcher
@@ -144,7 +145,8 @@ def train_cfm(args: DictConfig):
             nde = NeuralODE(cnf, solver="euler", sensitivity="adjoint")
             cnf_model = torch.nn.Sequential(Augmenter(augment_idx=1, augment_dims=1), nde)
             # with torch.no_grad():
-            x1 = sample_moons(args.eval_batch_size).to(device).requires_grad_()
+            # x1 = sample_moons(args.eval_batch_size).to(device).requires_grad_()
+            x1 = trgtdist.sample(args.eval_batch_size).to(device).requires_grad_()
             # integrate backwards from t=1 (tdata) to t=0 (tnoise)
             aug_traj = (
                 cnf_model[1]
