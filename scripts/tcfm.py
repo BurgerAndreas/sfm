@@ -15,7 +15,7 @@ from sfm.plot_inference_sidebyside import plot_inference_sidebyside
 def hydra_wrapper(args: DictConfig) -> None:
     
     # set up names for files and directories
-    proj_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    proj_dir = os.path.dirname(os.path.dirname(__file__))
     args.runname = f"{args['source']['trgt']}-{args.data['trgt']}"
     if args.use_ot:
         args.runname += "-ot"
@@ -28,14 +28,14 @@ def hydra_wrapper(args: DictConfig) -> None:
     np.random.seed(args.seed)
     
     # run the task
-    if args.task == "train":
+    if args.task in ["train", "all"]:
         train_cfm(args)
-    elif args.task == "gif":
+    if args.task in ["gif", "all"]:
         plot_cfm_gif(args)
-    elif args.task == "sidebyside":
+    if args.task in ["sidebyside", "all"]:
         plot_inference_sidebyside(args)
-    else:
-        raise ValueError(f"Unknown task: {args.task}")
+    
+    print("\n === Done! ===\n")
 
 
 if __name__ == "__main__":

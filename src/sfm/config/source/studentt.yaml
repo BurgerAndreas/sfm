@@ -1,8 +1,9 @@
 # @package _global_
 
 source: 
+  trgt: studentt
+  # if data in [-1, 1]
   df: 10.0
   loc: 0.0
   scale: 0.2
-  trgt: studentt
   

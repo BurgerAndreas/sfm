@@ -56,6 +56,7 @@ class ContNormFlow(nn.Module):
         return odeint(self, z, 1.0, 0.0, phi=self.parameters())
 
     def log_prob(self, x: Tensor) -> Tensor:
+        # Identity matrix to compute trace
         I = torch.eye(x.shape[-1], dtype=x.dtype, device=x.device)
         I = I.expand(*x.shape, x.shape[-1]).movedim(-1, 0)
 
@@ -69,6 +70,8 @@ class ContNormFlow(nn.Module):
 
             return dx, trace * 1e-2
 
+        # ladj: log of the adjoint
+        # adjoint = absolute determinant of the jacobian
         ladj = torch.zeros_like(x[..., 0])
         z, ladj = odeint(augmented, (x, ladj), 0.0, 1.0, phi=self.parameters())
 

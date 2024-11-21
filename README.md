@@ -9,11 +9,11 @@ and [TorchCFM](https://github.com/atong01/conditional-flow-matching)
 ```bash
 mamba activate sfm
 
-python scripts/tcfm.py task=train
-python scripts/tcfm.py task=gif
+sources = ("8gaussians" "dirichlet" "laplace" "gaussian" "normal" "uniform" "mog")
 
-python scripts/tcfm.py source=8gaussians task=train
-python scripts/tcfm.py source=8gaussians task=gif
+for source in "${sources[@]}"; do
+    python scripts/tcfm.py source=${source} task=all
+done
 ```
 
 ## Run other flow matching losses
@@ -65,8 +65,11 @@ pip install torchvision==0.17.0+cu121 -f https://download.pytorch.org/whl/cu121/
 
 ## TODO
 
-[] start from gaussian source
-[] two gaussians source / mog source
+
+- [] evaluate log-likelihood of test set during training
+
+- [] save loss during training
+- [] load and plot loss curves
 
 - [] Measure Wasserstein distance between source and target
 - [] Select runs for loss/log_prob plots

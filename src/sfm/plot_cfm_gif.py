@@ -2,6 +2,8 @@ import math
 import os
 import time
 import hydra
+from omegaconf import DictConfig
+from tqdm import tqdm
 
 # import imageio
 import imageio.v2 as imageio
@@ -14,8 +16,6 @@ import torchdyn
 from torchdyn.core import DEFunc, NeuralODE
 from torchdyn.datasets import generate_moons
 from torchdyn.nn import Augmenter
-from omegaconf import DictConfig
-from tqdm import tqdm
 
 from torchcfm.models.models import MLP, GradModel
 from torchcfm.utils import torch_wrapper
@@ -117,7 +117,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
             cnf_model = torch.nn.Sequential(Augmenter(augment_idx=1, augment_dims=1), nde)
             with torch.no_grad():
                 if t > 0:
-                    # integrate backwards from t to 0
+                    # integrate backwards from t=1 (tdata) to t=0 (tnoise)
                     aug_traj = (
                         cnf_model[1]
                         .to(device)

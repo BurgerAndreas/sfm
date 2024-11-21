@@ -1,7 +1,13 @@
 # @package _global_
 
 source: 
+  trgt: laplace
+  
+  # if data in [-1, 1]
+  # loc: 0.0
+  # scale: 0.2
+  
+  # if data in [-7, 7]
   loc: 0.0
   scale: 1.0
-  trgt: laplace
   

@@ -1,6 +1,10 @@
 # @package _global_
 
 source: 
-  concentration: [1.0, 2.0]
   trgt: dirichlet
-  
+
+  # if data in [0, 1]
+  # concentration: [1.0, 2.0]
+
+  # if data in [-7, 7]
+  concentration: [5.0, 10.0]
