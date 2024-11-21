@@ -17,7 +17,7 @@ model:
 
 n_trainsteps: 10000
 batch_size: 256
-eval_batch_size: 1024
+eval_batch_size: 2048
 
 use_slcf: true # True works better
 use_ot: true
@@ -37,6 +37,7 @@ tags: null
 logfreq: 100
 evalfreq: 3000
 seed: 42
+dtype: float32
 
 wandb_run_name: FM
 # variables we can access in our code

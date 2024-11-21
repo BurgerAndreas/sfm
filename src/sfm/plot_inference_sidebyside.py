@@ -61,9 +61,8 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     )
     
     model = MLP(dim=2, time_varying=True)
-    cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"))
+    cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"), weights_only=True)
     model.load_state_dict(cp)
-    print(f"model:\n{model}")
     
     sourcedist = get_source_distribution(**args.source)
 
@@ -75,16 +74,29 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     os.makedirs(PLOT_DIR_SOURCE, exist_ok=True)
     
     # plot sample
+    set_plotstyle()
     plt.scatter(sample[:, 0], sample[:, 1], s=1, alpha=0.5)
-    plt.tight_layout()
+    plt.tight_layout(pad=0.0)
     fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_scatter.png"
     plt.savefig(fname, dpi=40)
     print(f"Saved sample to\n {fname}")
     plt.close()
     
     # plot sample as 2d histogram
-    plt.hist2d(sample[:, 0].numpy(), sample[:, 1].numpy(), bins=100, cmap="coolwarm")
-    plt.tight_layout()
+    set_plotstyle()
+    cmap = "coolwarm"
+    # cmap = sns.color_palette("Spectral", as_cmap=True)
+    # plt.hist2d(
+    #     sample[:, 0].numpy(), sample[:, 1].numpy(), bins=100, cmap=cmap
+    # )
+    # sns.kdeplot(
+    #     x=sample[:, 0].numpy(), y=sample[:, 1].numpy(), cmap=cmap, fill=True
+    # )
+    sns.histplot(
+        x=sample[:, 0].numpy(), y=sample[:, 1].numpy(), cmap=cmap, fill=True,
+        bins=100
+    )
+    plt.tight_layout(pad=0.0)
     fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_hist2d.png"
     plt.savefig(fname, dpi=40)
     print(f"Saved hist2d to\n {fname}")
@@ -97,9 +109,7 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     # with torch.no_grad():
     # [n_t_gif, n_samples, 2]
     traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
-    
     set_plotstyle()
-    
     n_plots = 1
     for i, t in tqdm(enumerate(ts)):
         fig, axes = plt.subplots(n_plots, n_models, figsize=(6 * n_models, 6 * n_plots))
@@ -131,13 +141,20 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
         # tqdm.write(f"Log-prob of sample under model: {log_probs.mean().item():0.2f}")
         log_probs = log_probs.reshape(Y.shape)
         ax = axis
-        ax.pcolormesh(X, Y, torch.exp(log_probs), vmax=1)
+        # viridis coolwarm BuPu PuRd magma inferno cividis prism ocean
+        cmap = "viridis" 
+        # cmap = sns.color_palette("Spectral", as_cmap=True)
+        ax.pcolormesh(
+            X, Y, torch.exp(log_probs), vmax=1, cmap=cmap,
+            # shading{'flat', 'nearest', 'gouraud', 'auto'}
+        )
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_xlim(-w, w)
         ax.set_ylim(-w, w)
         # ax.set_title(f"{args.runname}", fontsize=30)
-        plt.tight_layout(pad=0.0)
+        # can't get rid of white border, so pad a bit to make it look cleaner
+        plt.tight_layout(pad=0.1) 
         plt.savefig(f"{tempdir}/{tplotname}_{t:0.2f}.png", dpi=40)
         plt.close()
 
@@ -152,6 +169,8 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     # plot each image
     for i, (ax, img) in enumerate(zip(axes, images)):
         ax.imshow(img)
+        # remove border between plots
+        ax.axis("off")
         ax.set_xticks([])
         ax.set_yticks([]) 
         ax.set_title(f"T={ts[i]:0.2f}")

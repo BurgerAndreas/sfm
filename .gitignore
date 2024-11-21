@@ -2,6 +2,7 @@
 plots/*
 logs/*
 outputs/*
+runs
 
 *.pdf
 **/*.png

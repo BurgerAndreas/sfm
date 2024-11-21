@@ -1,7 +1,7 @@
 # Flow Matching beyond Gaussian Source Distributions
 
 Based on [Francois Rozet's gist](https://gist.github.com/francois-rozet/fd6a820e052157f8ac6e2aa39e16c1aa)
-and [TorchCFM](https://github.com/atong01/conditional-flow-matching)
+and [ Alexander Tong and Kilian Fatras's TorchCFM](https://github.com/atong01/conditional-flow-matching) 🙏
 
 
 ## Run TorchCFM
@@ -16,7 +16,22 @@ for source in "${sources[@]}"; do
 done
 ```
 
-## Run other flow matching losses
+## Installation
+
+```bash
+mamba env remove --name sfm -y
+mamba create -n sfm python=3.11 -y
+mamba activate sfm
+
+mamba install requirements.txt -y
+pip install torchcfm==0.1.0
+
+# install torch however needed for your system
+pip install torch==2.2.0+cu121 -f https://download.pytorch.org/whl/cu121/torch
+pip install torchvision==0.17.0+cu121 -f https://download.pytorch.org/whl/cu121/torchvision
+```
+
+## Run other flow matching losses (experimental)
 
 ```bash
 mamba activate sfm
@@ -48,30 +63,11 @@ for source in "${sources[@]}"; do
 done
 ```
 
-## Installation
-
-```bash
-mamba env remove --name sfm -y
-mamba create -n sfm python=3.11 -y
-mamba activate sfm
-
-mamba install requirements.txt -y
-pip install torchcfm==0.1.0
-
-# install torch however needed for your system
-pip install torch==2.2.0+cu121 -f https://download.pytorch.org/whl/cu121/torch
-pip install torchvision==0.17.0+cu121 -f https://download.pytorch.org/whl/cu121/torchvision
-```
-
 ## TODO
 
 
-- [] evaluate log-likelihood of test set during training
-
-- [] save loss during training
 - [] load and plot loss curves
 
 - [] Measure Wasserstein distance between source and target
-- [] Select runs for loss/log_prob plots
 
 

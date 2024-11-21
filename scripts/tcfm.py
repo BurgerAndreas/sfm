@@ -27,6 +27,9 @@ def hydra_wrapper(args: DictConfig) -> None:
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     
+    # set dtype
+    torch.set_default_dtype(getattr(torch, args.dtype))
+    
     # run the task
     if args.task in ["train", "all"]:
         train_cfm(args)

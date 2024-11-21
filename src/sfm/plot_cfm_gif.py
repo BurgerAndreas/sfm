@@ -67,9 +67,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
     )
     
     model = MLP(dim=2, time_varying=True)
-    cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"))
+    cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"), weights_only=True)
     model.load_state_dict(cp)
-    print(f"model:\n{model}")
     
     sourcedist = get_source_distribution(**args.source)
 
@@ -111,6 +110,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
         iplot = 0
         
         ### log-probability / density plot
+        # sample probability of points on a grid
         if args.doplot[0]:
             cnf = DEFunc(CNF(model))
             nde = NeuralODE(cnf, solver="euler", sensitivity="adjoint")
@@ -133,8 +133,6 @@ def plot_cfm_gif(args: DictConfig) -> None:
                     # log_probs = log_8gaussian_density(gridpoints)
                     log_probs = sourcedist.log_prob(gridpoints)
             assert log_probs.shape == (points_real**2,), f"log_probs.shape: {log_probs.shape}"
-            # print(f"Log-prob of sample: {sourcedist.log_prob(sample).mean().item()}")
-            tqdm.write(f"Log-prob of sample under model: {log_probs.mean().item():0.2f}")
             log_probs = log_probs.reshape(Y.shape)
             ax = axis[iplot]
             ax.pcolormesh(X, Y, torch.exp(log_probs), vmax=1)

@@ -2,6 +2,7 @@ import math
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+import numpy as np
 
 from sklearn.datasets import make_moons
 from torch import Tensor
@@ -127,14 +128,14 @@ class MixtureOfGaussians(CoupledSourceDistribution):
     pis = [0.5, 0.5]  # Equal mixture weights
     """
 
-    def __init__(self, mus: Tensor, sigmas: Tensor, pis: Tensor, data_dim: int = 2, **kwargs):
+    def __init__(self, mus: Tensor, sigmas: Tensor, pis: Tensor, data_dim: int = 2, dtype: torch.dtype = torch.float32, **kwargs):
         # means (components x dimensions)
-        super().__init__(data_dim, **kwargs)
-        mus = torch.as_tensor(mus)
+        super().__init__(data_dim, dtype=dtype, **kwargs)
+        mus = torch.as_tensor(mus, dtype=dtype)
         # std deviations (components x dimensions)
-        sigmas = torch.as_tensor(sigmas)
+        sigmas = torch.as_tensor(sigmas, dtype=dtype)
         # mixture weights (components)
-        pis = torch.as_tensor(pis)
+        pis = torch.as_tensor(pis, dtype=dtype)
         mix = torch.distributions.Categorical(pis)
         self.K = len(mus)  # Number of components
         assert mus.shape == (self.K, data_dim), f"mus has wrong shape {mus.shape}"
@@ -142,7 +143,9 @@ class MixtureOfGaussians(CoupledSourceDistribution):
         assert pis.shape == (self.K,), f"pis has wrong shape {pis.shape}"
         assert all(0 <= pi <= 1 for pi in pis), "all pis must be between 0 and 1"
         assert sum(pis) == 1, "pis must sum to 1"
-        comp = torch.distributions.Independent(torch.distributions.Normal(mus, sigmas), 1)
+        comp = torch.distributions.Independent(
+            torch.distributions.Normal(mus, sigmas), 1
+        )
         self.dist = torch.distributions.MixtureSameFamily(mix, comp)
 
 

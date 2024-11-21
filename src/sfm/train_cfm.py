@@ -155,7 +155,7 @@ def train_cfm(args: DictConfig):
                 )
             )[-1].cpu()
             # Compute log probabilities
-            log_probs = sourcedist.log_prob(aug_traj[:, 1:]) + aug_traj[:, 0]
+            log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
             logprobs_train.append([k, log_probs.mean().item()])
             print(f"Log-likelihood of test set: {log_probs.mean().item():0.3f}")
 
