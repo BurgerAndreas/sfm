@@ -22,6 +22,19 @@ eval_batch_size: 2048
 use_slcf: true # True works better
 use_ot: true
 
+loss_scale: 1
+lr: 0.001
+
+# plim: [-0.5,1.5] # domain for plots
+# source:
+#   dmin: 0 # domain for data
+#   dmax: 1
+
+plim: [-7,7] # domain for plots
+data:
+  dmin: -5 # domain for data
+  dmax: 5
+
 # computational
 force_cpu: false
 savedir: null

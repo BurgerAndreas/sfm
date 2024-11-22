@@ -2,4 +2,5 @@
 
 source: 
   trgt: normal
-  
+  mean: 0.5
+  std: 0.1

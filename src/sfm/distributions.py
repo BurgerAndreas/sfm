@@ -65,7 +65,7 @@ class UniformSource(SourceDistribution):
 
 
 class StandardNormalSource(SourceDistribution):
-    def __init__(self, data_dim: int = 2, mean:float = 0, std: float = 0.3, **kwargs):
+    def __init__(self, data_dim: int = 2, mean: float = 0.5, std: float = 0.01, **kwargs):
         """Mean=0, std=1"""
         super().__init__(data_dim, **kwargs)
         self.dist = torch.distributions.Normal(mean, std)

@@ -40,6 +40,7 @@ from sfm.distributions import get_source_distribution
 from sfm.datasets import sample_dataset, get_dataset
 from sfm.tcfmhelpers import sample_conditional_pt, compute_conditional_vector_field
 from sfm.tcfmhelpers import CNF
+from sfm.plotstyle import set_seaborn_style, set_style_after
 
 
 def train_cfm(args: DictConfig):
@@ -63,9 +64,25 @@ def train_cfm(args: DictConfig):
 
     sourcedist = get_source_distribution(**args.source)
     trgtdist = get_dataset(**args.data)
+    
+    # plot the target distribution
+    # plot target distribution samples
+    noise = sourcedist.sample(1000).cpu().numpy()
+    samples = trgtdist.sample(1000).cpu().numpy()
+    set_seaborn_style()
+    fig = plt.figure(figsize=(6,6))
+    plt.scatter(samples[:,0], samples[:,1], alpha=0.5, s=2)
+    set_style_after(ax=fig.gca())
+    plt.savefig(f"{args.savedir}/targetdist.png")
+    print(f"Saved {args.savedir}/targetdist.png")
+    plt.scatter(noise[:,0], noise[:,1], alpha=0.5, s=2)
+    plt.savefig(f"{args.savedir}/srctrgt.png")
+    print(f"Saved {args.savedir}/srctrgt.png")
+    plt.close()
+    
     model = get_model(**args.model, dim=dim).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     flowmatching = ConditionalFlowMatcher(sigma=sigma)
     # Target FM (Lipman et al. 2023), only works with Gaussian source
     # FM = TargetConditionalFlowMatcher(sigma=sigma)
@@ -91,6 +108,13 @@ def train_cfm(args: DictConfig):
         # sample target distribution [B, D]
         # x1 = sample_moons(args.batch_size).to(device)
         x1 = trgtdist.sample(args.batch_size).to(device)
+        # print(f"data x:  {x1[:, 0].min().item():0.3f}, {x1[:, 0].max().item():0.3f}")
+        # print(f"data y:  {x1[:, 1].min().item():0.3f}, {x1[:, 1].max().item():0.3f}")
+        # print(f"noise x: {x0[:, 0].min().item():0.3f}, {x0[:, 0].max().item():0.3f}")
+        # print(f"noise y: {x0[:, 1].min().item():0.3f}, {x0[:, 1].max().item():0.3f}")
+        
+        # assert x0.max() <= 1.5 and x0.min() >= 0, "x0 is out of bounds"
+        # assert x1.max() <= 1.5 and x1.min() >= 0, "x1 is out of bounds"
 
         # Draw samples from OT plan
         # only difference between ConditionalFlowMatcher and ExactOptimalTransportConditionalFlowMatcher
@@ -111,7 +135,8 @@ def train_cfm(args: DictConfig):
         )
         # vt = model(t, xt, y=None)
 
-        loss = torch.nanmean((vt - ut) ** 2)
+        # since our data is in [0, 1], the loss is very small
+        loss = torch.mean((vt - ut) ** 2) * args.loss_scale
 
         loss.backward()
         # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)

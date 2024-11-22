@@ -98,11 +98,17 @@ def sample_dataset(trgt: str, *args, **kwargs) -> torch.Tensor:
     return _datasets[trgt](*args, **kwargs)
 
 class DatasetDummy:
-    def __init__(self, trgt: str, *args, **kwargs):
-        self.samplefct = lambda n_samples: sample_dataset(trgt, *args, **kwargs, n_samples=n_samples)
+    def __init__(self, trgt: str, **kwargs):
+        self.dmin = kwargs.get("dmin", 0)
+        self.dmax = kwargs.get("dmax", 1)
+        self.samplefct = lambda n_samples: sample_dataset(trgt, n_samples=n_samples, **kwargs)
         
     def sample(self, n_samples):
-        return self.samplefct(n_samples)
+        samples = self.samplefct(n_samples)
+        # samples are already in [0, 1]
+        # samples = (samples - samples.min()) / (samples.max() - samples.min())
+        samples = samples * (self.dmax - self.dmin) + self.dmin
+        return samples
 
 def get_dataset(trgt: str, *args, **kwargs):
     return DatasetDummy(trgt, *args, **kwargs)

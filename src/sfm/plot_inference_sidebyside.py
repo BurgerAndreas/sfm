@@ -32,6 +32,9 @@ def set_seaborn_style(*args, **kwargs):
 def plot_inference_sidebyside(args: DictConfig) -> None:
     print(f"Plotting inference sidebyside for {args.runname}\n")
     
+    limmin = args.plim[0]
+    limmax = args.plim[1]
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if args.force_cpu:
         device = "cpu"
@@ -52,12 +55,12 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     # log-prob plot
     points = 100j
     points_real = 100
-    Y, X = np.mgrid[0:1:points, 0:1:points] # [points, points]
+    Y, X = np.mgrid[limmin:limmax:points, limmin:limmax:points] # [points, points]
     gridpoints = torch.tensor(np.stack([X.flatten(), Y.flatten()], axis=1)).type(torch.float32) # [points**2, 2]
     # quiver plot
     points_small = 20j
     points_real_small = 20
-    Y_small, X_small = np.mgrid[0:1:points_small, 0:1:points_small] # [points_small, points_small]
+    Y_small, X_small = np.mgrid[limmin:limmax:points_small, limmin:limmax:points_small] # [points_small, points_small]
     gridpoints_small = torch.tensor(np.stack([X_small.flatten(), Y_small.flatten()], axis=1)).type(
         torch.float32
     )
@@ -169,8 +172,8 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
         )
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
+        ax.set_xlim(limmin, limmax)
+        ax.set_ylim(limmin, limmax)
         # ax.set_title(f"{args.runname}", fontsize=30)
         # can't get rid of white border, so pad a bit to make it look cleaner
         plt.tight_layout(pad=0.1) 

@@ -51,16 +51,19 @@ def plot_cfm_gif(args: DictConfig) -> None:
     n_t_span = 201
     n_t_gif = 101
     
+    limmin = args.plim[0]
+    limmax = args.plim[1]
+    
     # plotting stuff
     # log-prob plot
     points = 100j
     points_real = 100
-    Y, X = np.mgrid[0:1:points, 0:1:points] # [points, points]
+    Y, X = np.mgrid[limmin:limmax:points, limmin:limmax:points] # [points, points]
     gridpoints = torch.tensor(np.stack([X.flatten(), Y.flatten()], axis=1)).type(torch.float32) # [points**2, 2]
     # quiver plot
     points_small = 20j
     points_real_small = 20
-    Y_small, X_small = np.mgrid[0:1:points_small, 0:1:points_small] # [points_small, points_small]
+    Y_small, X_small = np.mgrid[limmin:limmax:points_small, limmin:limmax:points_small] # [points_small, points_small]
     gridpoints_small = torch.tensor(np.stack([X_small.flatten(), Y_small.flatten()], axis=1)).type(
         torch.float32
     )
@@ -137,8 +140,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
             ax.pcolormesh(X, Y, torch.exp(log_probs), vmax=1)
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_xlim(0, 1)
-            ax.set_ylim(0, 1)
+            ax.set_xlim(limmin, limmax)
+            ax.set_ylim(limmin, limmax)
             # ax.set_title(f"{args.runname}", fontsize=20)
             iplot += 1
         
@@ -165,7 +168,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
             )
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_xlim(0, 1)
+            ax.set_xlim(limmin, limmax)
+            ax.set_ylim(limmin, limmax)
             iplot += 1
 
         ### Trajectory plot
@@ -176,8 +180,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
             ax.scatter(traj[i, :, 0], traj[i, :, 1], s=4, alpha=1, c=_cscheme["final"])
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_xlim(0, 1)
-            ax.set_ylim(0, 1)
+            ax.set_xlim(limmin, limmax)
+            ax.set_ylim(limmin, limmax)
             iplot += 1
         
         plt.tight_layout(pad=0.0)
