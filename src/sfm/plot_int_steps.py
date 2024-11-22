@@ -28,7 +28,8 @@ from torchcfm.utils import torch_wrapper
 from sfm.distributions import get_source_distribution
 from sfm.tcfmhelpers import CNF
 from sfm.plotstyle import _cscheme, set_seaborn_style
-
+from sfm.networks import get_model
+from sfm.datasets import get_dataset
 
 
 def plot_integration_steps(args: DictConfig) -> None:
@@ -44,7 +45,6 @@ def plot_integration_steps(args: DictConfig) -> None:
     # folder with temporary trajectory plots
     tempdir = f"{args.savedir}/integrationsteps"
     os.makedirs(tempdir, exist_ok=True)
-    os.makedirs(PLOT_DIR_SOURCE, exist_ok=True)    
     
     tplotname = "logprob_intsteps"
     combinedplotname = f"{tplotname}_{args['source']['trgt']}-to-{args.data['trgt']}"
@@ -55,6 +55,8 @@ def plot_integration_steps(args: DictConfig) -> None:
     max_integration_steps = args.plot_integration_steps
     n_integration_steps = 5
     n_img = 5 # number of images of the inference trajectory
+    tdata = 1
+    tnoise = 0
     
     model = get_model(**args.model).to(device)
     cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"), weights_only=True)
@@ -67,7 +69,7 @@ def plot_integration_steps(args: DictConfig) -> None:
     sample = sourcedist.sample(n_samples) # [n_samples, 2]
     assert sample.shape == (n_samples, 2), f"sample.shape: {sample.shape}"
 
-    trgtdist = get_target_distribution(**args.data)
+    trgtdist = get_dataset(**args.data)
     
     # plotting stuff for log-prob plot
     points = 100j
@@ -87,8 +89,11 @@ def plot_integration_steps(args: DictConfig) -> None:
     # integrate up to 1 / starting from 1 using intsteps steps
     # the better the flow the faster / fewer steps still give good results
     # will include 0 and max
-    for intsteps in torch.linspace(0, max_integration_steps, n_integration_steps): 
-        intsteps = int(intsteps)
+    intsteps_list = torch.linspace(0, max_integration_steps, n_integration_steps)
+    intsteps_list = [int(intsteps) for intsteps in intsteps_list]
+    intsteps_list = [intsteps if intsteps != 1 else 2 for intsteps in intsteps_list]
+    print(f"intsteps_list: {intsteps_list}")
+    for intsteps in intsteps_list: 
         
         ### calculate log-likelihood of sample
         if args.classcond:
@@ -101,6 +106,9 @@ def plot_integration_steps(args: DictConfig) -> None:
             # x1 = sample_moons(args.eval_batch_size).to(device).requires_grad_()
             x1 = trgtdist.sample(args.eval_batch_size).to(device).requires_grad_()
             if intsteps > 0:
+                # if intsteps == 1:
+                #     print("Warning: setting intsteps=2 because intsteps=1 is not allowed")
+                #     intsteps = 2
                 # integrate backwards from t=1 (tdata) to t=0 (tnoise)
                 aug_traj = (
                 cnf_model[1]
@@ -116,7 +124,7 @@ def plot_integration_steps(args: DictConfig) -> None:
             else:
                 log_probs = sourcedist.log_prob(x1)
             logprobs_intsteps.append([intsteps, log_probs.nanmean().item()])
-            print(f"Log-likelihood of test set: {log_probs.nanmean().item():0.3f}")
+            print(f"Log-likelihood intsteps={intsteps}: {log_probs.nanmean().item():0.3f}")
 
         ### trajectory plot?
         # src/sfm/plot_cfm_gif.py
@@ -176,12 +184,12 @@ def plot_integration_steps(args: DictConfig) -> None:
         
         
     # load all density plots and put side by side into one figure
-    fignames = [f"{tempdir}/{tplotname}_{t:0.2f}.png" for t in ts]
+    fignames = [f"{tempdir}/{tplotname}_{intsteps}.png" for intsteps in intsteps_list]
     images = [imageio.imread(fname) for fname in fignames]
     
     # create a new figure with subplots side by side
     n_plots = len(images)
-    fig, axes = plt.subplots(1, 1, figsize=(6, 6))
+    fig, axes = plt.subplots(1, n_plots, figsize=(6*n_plots, 6))
     # plot each image
     for i, (ax, img) in enumerate(zip(axes, images)):
         ax.imshow(img)
@@ -198,6 +206,10 @@ def plot_integration_steps(args: DictConfig) -> None:
     plt.savefig(fname, dpi=40)
     plt.close()
     print(f"Saved integration steps to\n {fname}")
+    
+    # save intsteps_list for reference
+    np.save(f"{args.savedir}/{combinedplotname}_intsteps_list.npy", intsteps_list)
+    print(f"Saved intsteps_list to {args.savedir}/{combinedplotname}_intsteps_list.npy")
     
     # save logprobs_intsteps
     logprobs_intsteps = np.array(logprobs_intsteps)

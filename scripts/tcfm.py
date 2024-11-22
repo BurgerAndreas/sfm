@@ -37,7 +37,8 @@ def hydra_wrapper(args: DictConfig) -> None:
         train_cfm(args)
     if args.task in ["gif", "all"]:
         plot_cfm_gif(args)
-    if args.task in ["intsteps", "all"]:
+    if args.task in ["int", "all"]:
+        # task=int plot_integration_steps=6
         plot_integration_steps(args)
     if args.task in ["sidebyside", "all"]:
         plot_inference_sidebyside(args)
