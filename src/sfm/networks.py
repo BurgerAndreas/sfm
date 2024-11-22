@@ -3,6 +3,8 @@ import torch.nn as nn
 from torch import Tensor
 from typing import List
 
+from torchcfm.models.unet import UNetModel
+
 # MLP architecture with time embedding for the neural network modeling the vector field
 class MLPSepTimeEmb(nn.Sequential):
     def __init__(
@@ -85,12 +87,30 @@ class MLPTimeEmb(torch.nn.Module):
         t = torch.cat((t.cos(), t.sin()), dim=-1)  # [B, 2D]
         x = torch.cat((t, x[..., :-1]), dim=-1)  # [B, D+2D]
         return self.net(x)
-    
+
+
 
 _models = {
     "mlp": MLPTime,
     "mlptime": MLPTimeEmb,
+    "unet": UNetModel,
 }
 
 def get_model(trgt: str, **kwargs):
     return _models[trgt](**kwargs)
+
+
+if __name__ == "__main__":
+    
+    # example: conditional-flow-matching/examples/images/conditional_mnist.ipynb
+    # model = UNetModel(
+    #     dim=(1, 28, 28), num_channels=32, num_res_blocks=1, num_classes=10, class_cond=True
+    # )
+    model = get_model(
+        "unet", 
+        dim=(1, 28, 28), 
+        num_channels=32, 
+        num_res_blocks=1, 
+        num_classes=10, 
+        class_cond=True
+    )

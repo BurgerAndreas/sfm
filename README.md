@@ -1,7 +1,7 @@
 # Flow Matching beyond Gaussian Source Distributions
 
 Based on [Francois Rozet's gist](https://gist.github.com/francois-rozet/fd6a820e052157f8ac6e2aa39e16c1aa)
-and [ Alexander Tong and Kilian Fatras's TorchCFM](https://github.com/atong01/conditional-flow-matching) 🙏
+and [Alexander Tong and Kilian Fatras's TorchCFM](https://github.com/atong01/conditional-flow-matching) 🙏
 
 
 ## Run TorchCFM
@@ -9,7 +9,7 @@ and [ Alexander Tong and Kilian Fatras's TorchCFM](https://github.com/atong01/co
 ```bash
 mamba activate sfm
 
-sources=("8gaussians" "gamma" "dirichlet" "diagonal" "laplace" "gaussian" "normal" "uniform" "mog" "multivariate")
+sources=("8gaussians" "gamma" "beta" "diagonal" "laplace" "gaussian" "normal" "uniform" "mog" "multivariate")
 ots=(True False)
 
 for use_ot in "${ots[@]}"; do
@@ -68,7 +68,14 @@ done
 
 ## TODO
 
-
+- [] gif naming based on integration steps
+- [] name gifs based on ot
+- [] sweep training with different inference steps
+- [] plot different inference steps sidebyside
+- [] MNIST
+    - [] MNIST as target / data
+    - [] UNET as model
+    - [] ensure shapes and bounds
 - [] Measure Wasserstein distance between source and target
 
 

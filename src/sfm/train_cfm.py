@@ -42,6 +42,18 @@ from sfm.tcfmhelpers import sample_conditional_pt, compute_conditional_vector_fi
 from sfm.tcfmhelpers import CNF
 from sfm.plotstyle import set_seaborn_style, set_style_after
 
+def get_trajplot_name(args: DictConfig, k: int):
+    # traj_{k}_steps{nsteps}.png
+    return f"{args.savedir}/traj_{k}_is{args.eval_integration_steps}.png"
+
+def get_logprob_name(args: DictConfig):
+    return f"{args.savedir}/logprobs_is{args.eval_integration_steps}.npy"
+
+def get_loss_name(args: DictConfig):
+    return f"{args.savedir}/losses.npy"
+
+def get_model_name(args: DictConfig):
+    return f"{args.savedir}/{args.cpname}.pth"
 
 def train_cfm(args: DictConfig):
     print(f"Training CFM for {args.runname}\n")
@@ -58,7 +70,7 @@ def train_cfm(args: DictConfig):
     ot_sampler = OTPlanSampler(method="exact")
     sigma = 0.1 # for flow matching
     dim = 2 # dimension of the data
-    n_int_steps = 100 # number of integration steps
+    nintsteps = args.eval_integration_steps 
     tnoise = 0 # noise time
     tdata = 1 # data time
 
@@ -80,10 +92,14 @@ def train_cfm(args: DictConfig):
     print(f"Saved {args.savedir}/srctrgt.png")
     plt.close()
     
-    model = get_model(**args.model, dim=dim).to(device)
+    model = get_model(**args.model).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    flowmatching = ConditionalFlowMatcher(sigma=sigma)
+    if args.classcond and args.use_ot:
+        flowmatching = ExactOptimalTransportConditionalFlowMatcher(sigma=sigma)
+    else:
+        flowmatching = ConditionalFlowMatcher(sigma=sigma)
+        
     # Target FM (Lipman et al. 2023), only works with Gaussian source
     # FM = TargetConditionalFlowMatcher(sigma=sigma)
     # Exact OT CFM
@@ -107,7 +123,7 @@ def train_cfm(args: DictConfig):
         assert x0.shape == (args.batch_size, dim)
         # sample target distribution [B, D]
         # x1 = sample_moons(args.batch_size).to(device)
-        x1 = trgtdist.sample(args.batch_size).to(device)
+        x1 = trgtdist.sample(args.batch_size)
         # print(f"data x:  {x1[:, 0].min().item():0.3f}, {x1[:, 0].max().item():0.3f}")
         # print(f"data y:  {x1[:, 1].min().item():0.3f}, {x1[:, 1].max().item():0.3f}")
         # print(f"noise x: {x0[:, 0].min().item():0.3f}, {x0[:, 0].max().item():0.3f}")
@@ -116,26 +132,31 @@ def train_cfm(args: DictConfig):
         # assert x0.max() <= 1.5 and x0.min() >= 0, "x0 is out of bounds"
         # assert x1.max() <= 1.5 and x1.min() >= 0, "x1 is out of bounds"
 
-        # Draw samples from OT plan
-        # only difference between ConditionalFlowMatcher and ExactOptimalTransportConditionalFlowMatcher
-        if args.use_ot:
-            x0, x1 = ot_sampler.sample_plan(x0, x1)
+        if args.classcond:
+            data = x1
+            x1 = data[0].to(device)
+            y = data[1].to(device)  # class labels
+            if args.use_ot:
+                t, xt, ut, _, y1 = FM.guided_sample_location_and_conditional_flow(x0, x1, y1=y)
+                vt = model(t, xt, y1)
+            else:
+                t, xt, ut = flowmatching.sample_location_and_conditional_flow(x0, x1)
+                vt = model(t, xt, y)
+        else:
+            x1 = x1.to(device)
+            # Draw samples from OT plan
+            # only difference between ConditionalFlowMatcher and ExactOptimalTransportConditionalFlowMatcher
+            if args.use_ot:
+                x0, x1 = ot_sampler.sample_plan(x0, x1)
 
-        if args.use_slcf:
             # [B], [B, D], [B, D]
             t, xt, ut = flowmatching.sample_location_and_conditional_flow(x0, x1)
-        else:
-            t = torch.rand(x0.shape[0], device=device).type_as(x0)
-            xt = sample_conditional_pt(x0, x1, t, sigma=0.01, device=device)
-            ut = compute_conditional_vector_field(x0, x1, device=device)
 
-        # [B, D+1] -> [B, D]
-        vt = model(
-            torch.cat([xt, t[:, None]], dim=-1) # [B,D], [B] -> [B,D+1]
-        )
-        # vt = model(t, xt, y=None)
+            # [B, D+1] -> [B, D]
+            vt = model(
+                torch.cat([xt, t[:, None]], dim=-1) # [B,D], [B] -> [B,D+1]
+            )
 
-        # since our data is in [0, 1], the loss is very small
         loss = torch.mean((vt - ut) ** 2) * args.loss_scale
 
         loss.backward()
@@ -146,57 +167,74 @@ def train_cfm(args: DictConfig):
         losses.append([k, loss.item()])
 
         # evaluate model
+        # this part depends on the number of integration steps
         if ((k + 1) % args.evalfreq == 0) or (k == 0):
             end = time.time()
             tqdm.write(f"{k+1}: loss {loss.item():0.3f} time {(end - start):0.2f}")
             start = end
             # generate samples and plot trajectories
             with torch.no_grad():
-                # [T, B, D]
-                traj = node.trajectory(
-                    # x=sample_8gaussians(args.eval_batch_size).to(device),
-                    x=sourcedist.sample(args.eval_batch_size).to(device),
-                    t_span=torch.linspace(tnoise, tdata, n_int_steps, device=device),
-                )
+                if args.classcond:
+                    generated_class_list = torch.arange(10, device=device).repeat(10)
+                    traj = torchdiffeq.odeint(
+                        func=lambda t, x: model.forward(t, x, generated_class_list),
+                        # y0=torch.randn(100, 1, 28, 28, device=device),
+                        y0=sourcedist.sample(args.eval_batch_size).to(device),
+                        t=torch.linspace(tnoise, tdata, 2, device=device),
+                        atol=1e-4,
+                        rtol=1e-4,
+                        method="dopri5",
+                    )
+                else:
+                    # [T, B, D]
+                    traj = node.trajectory(
+                        # x=sample_8gaussians(args.eval_batch_size).to(device),
+                        x=sourcedist.sample(args.eval_batch_size).to(device),
+                        t_span=torch.linspace(tnoise, tdata, nintsteps, device=device),
+                    )
                 fig = plot_trajectories(traj.cpu().numpy())
-                fig.savefig(f"{args.savedir}/train/traj_{k}.png")
+                fig.savefig(get_trajplot_name(args, k))
                 plt.close(fig)
-                print(f"Saved trajectory to {args.savedir}/train/traj_{k}.png")
+                print(f"Saved trajectory to {get_trajplot_name(args, k)}")
             
             # compute log-likelihood of test set
             # starting from target points, integrate backwards from t=1 to t=0 to get the source points
             # compute the log-likelihood using the source distribution and the trace term
-            cnf = DEFunc(CNF(model))
-            nde = NeuralODE(cnf, solver="euler", sensitivity="adjoint")
-            cnf_model = torch.nn.Sequential(Augmenter(augment_idx=1, augment_dims=1), nde)
-            # with torch.no_grad():
-            # x1 = sample_moons(args.eval_batch_size).to(device).requires_grad_()
-            x1 = trgtdist.sample(args.eval_batch_size).to(device).requires_grad_()
-            # integrate backwards from t=1 (tdata) to t=0 (tnoise)
-            aug_traj = (
-                cnf_model[1]
-                .to(device)
-                .trajectory(
-                    Augmenter(1, 1)(x1).to(device),
-                    t_span=torch.linspace(start=tdata, end=tnoise, steps=n_int_steps, device=device),
-                )
-            )[-1].cpu()
-            # Compute log probabilities
-            log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
-            logprobs_train.append([k, log_probs.nanmean().item()])
-            print(f"Log-likelihood of test set: {log_probs.nanmean().item():0.3f}")
+            if args.classcond:
+                pass
+            else:
+                cnf = DEFunc(CNF(model))
+                nde = NeuralODE(cnf, solver="euler", sensitivity="adjoint")
+                cnf_model = torch.nn.Sequential(Augmenter(augment_idx=1, augment_dims=1), nde)
+                # with torch.no_grad():
+                # x1 = sample_moons(args.eval_batch_size).to(device).requires_grad_()
+                x1 = trgtdist.sample(args.eval_batch_size).to(device).requires_grad_()
+                # integrate backwards from t=1 (tdata) to t=0 (tnoise)
+                aug_traj = (
+                    cnf_model[1]
+                    .to(device)
+                    .trajectory(
+                        x=Augmenter(1, 1)(x1).to(device),
+                        t_span=torch.linspace(start=tdata, end=tnoise, steps=nintsteps, device=device),
+                    )
+                )[-1].cpu()
+                # Compute log probabilities
+                # We can load the log probs later to plot the training progress
+                log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
+                logprobs_train.append([k, log_probs.nanmean().item()])
+                print(f"Log-likelihood of test set: {log_probs.nanmean().item():0.3f}")
 
     # save model
-    torch.save(model.state_dict(), f"{args.savedir}/{args.cpname}.pth")
-    print(f"Saved model to {args.savedir}/{args.cpname}.pth")
+    torch.save(model.state_dict(), get_model_name(args))
+    print(f"Saved model to {get_model_name(args)}")
     
     # save losses
     losses = np.array(losses)
-    np.save(f"{args.savedir}/losses.npy", losses)
-    print(f"Saved losses to {args.savedir}/losses.npy")
+    np.save(get_loss_name(args), losses)
+    print(f"Saved losses to {get_loss_name(args)}")
     logprobs_train = np.array(logprobs_train)
-    np.save(f"{args.savedir}/logprobs_train.npy", logprobs_train)
-    print(f"Saved logprobs_train to {args.savedir}/logprobs.npy")
+    np.save(get_logprob_name(args), logprobs_train)
+    print(f"Saved logprobs_train to {get_logprob_name(args)}")
 
 @hydra.main(config_name="tcfm", config_path="./config", version_base="1.3")
 def hydra_wrapper(args: DictConfig) -> None:

@@ -22,8 +22,10 @@ from torchcfm.utils import torch_wrapper
 from sfm.distributions import get_source_distribution
 from sfm.tcfmhelpers import CNF
 from sfm.plotstyle import _cscheme
+from sfm.networks import get_model
 
 PLOT_DIR_SOURCE = "plots/sources"
+
 
 def plot_cfm_gif(args: DictConfig) -> None:
     print(f"Plotting CFM gif for {args.runname}\n")
@@ -44,12 +46,18 @@ def plot_cfm_gif(args: DictConfig) -> None:
         tplotname += "_traj"
     tplotname = tplotname[1:]
     
-    gif_name = f"{tplotname}_{args['source']['trgt']}-to-{args.data['trgt']}"
+    def get_frame_name(args: DictConfig, t: float):
+        # f"{args.savedir}/trajectory/{tplotname}_{t:0.2f}.png"
+        return f"{args.savedir}/trajectory/{tplotname}_{t:0.2f}.png"
     
-    n_models = 1
-    n_samples = 1024
-    n_t_span = 201
-    n_t_gif = 101
+    gif_name = f"{tplotname}_{args['source']['trgt']}-to-{args.data['trgt']}"
+    gif_name += f"_is{args.plot_integration_steps}"
+    gif_name += "_ot" if args.use_ot else ""
+    
+    n_models = 1 # number of columns in the plot
+    n_samples = args.plot_batch_size
+    n_t_span = args.plot_integration_steps
+    n_frames = 101 # number of frames in the gif
     
     limmin = args.plim[0]
     limmax = args.plim[1]
@@ -68,7 +76,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
         torch.float32
     )
     
-    model = MLP(dim=2, time_varying=True)
+    # model = MLP(dim=2, time_varying=True)
+    model = get_model(**args.model).to(device)
     cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"), weights_only=True)
     model.load_state_dict(cp)
     
@@ -97,15 +106,15 @@ def plot_cfm_gif(args: DictConfig) -> None:
     print(f"Saved hist2d to\n {fname}")
     plt.close()
     
-    ts = torch.linspace(0, 1, n_t_gif) # [n_t_gif]
+    ts = torch.linspace(0, 1, n_frames) # [n_frames]
     
     # compute trajectory once, later pick time slices for gif
     nde = NeuralODE(DEFunc(torch_wrapper(model)), solver="euler").to(device)
     # with torch.no_grad():
-    # [n_t_gif, n_samples, 2]
+    # [n_frames, n_samples, 2]
     traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
     
-    n_plots = sum(args.doplot)
+    n_plots = sum(args.doplot) # number of rows in the plot
     for i, t in tqdm(enumerate(ts)):
         fig, axes = plt.subplots(n_plots, n_models, figsize=(6 * n_models, 6 * n_plots))
         axis = axes if n_models == 1 else axes[:, 0]
@@ -186,16 +195,25 @@ def plot_cfm_gif(args: DictConfig) -> None:
         
         plt.tight_layout(pad=0.0)
         # plt.suptitle(f"{args['source']['trgt']} to Moons T={t:0.2f}", fontsize=20)
-        plt.savefig(f"{args.savedir}/trajectory/{tplotname}_{t:0.2f}.png", dpi=40)
+        plt.savefig(get_frame_name(args, t), dpi=40)
         plt.close()
         # print(f"Saved figure to\n {args.savedir}/trajectory/{t:0.2f}.png")
     
     # load all trajectory plots and save as gif
-    fignames = [f"{args.savedir}/trajectory/{tplotname}_{t:0.2f}.png" for t in ts] 
-    fignames += [f"{args.savedir}/trajectory/{tplotname}_{ts[-1].item():0.2f}.png"] * 10
-    with imageio.get_writer(f"{args.savedir}/{gif_name}.gif", mode="I") as writer:
+    fignames = [get_frame_name(args, t) for t in ts] 
+    # add 10 frames at the end to make the gif loop
+    fignames += [get_frame_name(args, ts[-1].item())] * 10
+    
+    # subrectangles to reduce file size
+    with imageio.get_writer(f"{args.savedir}/{gif_name}.gif", mode="I", subrectangles=True) as writer:
         for filename in fignames:
             image = imageio.imread(filename)
+            # Crop any border/shadow by finding the non-white pixels
+            # nonwhite = np.where(image[:,:,0] < 255)
+            # if len(nonwhite[0]) > 0:
+            #     ymin, ymax = np.min(nonwhite[0]), np.max(nonwhite[0])
+            #     xmin, xmax = np.min(nonwhite[1]), np.max(nonwhite[1])
+            #     image = image[ymin:ymax+1, xmin:xmax+1]
             writer.append_data(image)
     print(f"Saved gif to\n {args.savedir}/{gif_name}.gif")
 

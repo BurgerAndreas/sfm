@@ -10,6 +10,8 @@ from omegaconf import DictConfig
 from sfm.train_cfm import train_cfm
 from sfm.plot_cfm_gif import plot_cfm_gif
 from sfm.plot_inference_sidebyside import plot_inference_sidebyside
+from sfm.plot_int_steps import plot_integration_steps
+
 
 @hydra.main(config_name="tcfm", config_path="../src/sfm/config", version_base="1.3")
 def hydra_wrapper(args: DictConfig) -> None:
@@ -35,6 +37,8 @@ def hydra_wrapper(args: DictConfig) -> None:
         train_cfm(args)
     if args.task in ["gif", "all"]:
         plot_cfm_gif(args)
+    if args.task in ["intsteps", "all"]:
+        plot_integration_steps(args)
     if args.task in ["sidebyside", "all"]:
         plot_inference_sidebyside(args)
     

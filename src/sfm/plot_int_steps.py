@@ -1,3 +1,8 @@
+# load a pretrained model
+# for different integration steps:
+# 1. plot the generated samples
+# 2. plot the log-likelihood of validation samples
+
 import math
 import os
 import time
@@ -21,54 +26,13 @@ from torchcfm.models.models import MLP, GradModel
 from torchcfm.utils import torch_wrapper
 
 from sfm.distributions import get_source_distribution
-from sfm.networks import get_model
 from sfm.tcfmhelpers import CNF
 from sfm.plotstyle import _cscheme, set_seaborn_style
 
-PLOT_DIR_SOURCE = "plots/sources"
 
-# def set_seaborn_style(*args, **kwargs):
-#     pass
 
-def plot_samples(args: DictConfig, sample: Tensor) -> None:
-    # plot sample
-    set_seaborn_style()
-    plt.scatter(sample[:, 0], sample[:, 1], s=1, alpha=0.5)
-    plt.tight_layout(pad=0.0)
-    fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_scatter.png"
-    plt.savefig(fname, dpi=40)
-    print(f"Saved sample to\n {fname}")
-    plt.close()
-    
-    # plot sample as 2d histogram
-    set_seaborn_style()
-    cmap = "coolwarm"
-    # cmap = sns.color_palette("Spectral", as_cmap=True)
-    # plt.hist2d(
-    #     sample[:, 0].numpy(), sample[:, 1].numpy(), bins=100, cmap=cmap
-    # )
-    sns.histplot(
-        x=sample[:, 0].numpy(), y=sample[:, 1].numpy(), cmap=cmap, fill=True,
-        bins=100
-    )
-    plt.tight_layout(pad=0.0)
-    fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_hist2d.png"
-    plt.savefig(fname, dpi=40)
-    print(f"Saved hist2d to\n {fname}")
-    plt.close()
-    
-    # KDE plot
-    sns.kdeplot(
-        x=sample[:, 0].numpy(), y=sample[:, 1].numpy(), cmap=cmap, fill=True
-    )
-    plt.tight_layout(pad=0.0)
-    fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_kde.png"
-    plt.savefig(fname, dpi=40)
-    print(f"Saved kde to\n {fname}")
-    plt.close()
-
-def plot_inference_sidebyside(args: DictConfig) -> None:
-    print(f"Plotting inference sidebyside for {args.runname}\n")
+def plot_integration_steps(args: DictConfig) -> None:
+    print(f"Plotting integration steps for {args.runname}\n")
     
     limmin = args.plim[0]
     limmax = args.plim[1]
@@ -78,19 +42,19 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
         device = "cpu"
     
     # folder with temporary trajectory plots
-    tempdir = f"{args.savedir}/sidebyside"
+    tempdir = f"{args.savedir}/integrationsteps"
     os.makedirs(tempdir, exist_ok=True)
     os.makedirs(PLOT_DIR_SOURCE, exist_ok=True)    
     
-    tplotname = "logprob"
+    tplotname = "logprob_intsteps"
     combinedplotname = f"{tplotname}_{args['source']['trgt']}-to-{args.data['trgt']}"
     combinedplotname += f"-ot" if args.use_ot else ""
     
     n_models = 1
     n_samples = args.plot_batch_size
-    n_t_span = args.plot_integration_steps
+    max_integration_steps = args.plot_integration_steps
+    n_integration_steps = 5
     n_img = 5 # number of images of the inference trajectory
-    
     
     model = get_model(**args.model).to(device)
     cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"), weights_only=True)
@@ -102,7 +66,8 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     # sample = sample_8gaussians(n_samples) # [n_samples, 2]
     sample = sourcedist.sample(n_samples) # [n_samples, 2]
     assert sample.shape == (n_samples, 2), f"sample.shape: {sample.shape}"
-    plot_samples(args, sample)
+
+    trgtdist = get_target_distribution(**args.data)
     
     # plotting stuff for log-prob plot
     points = 100j
@@ -117,35 +82,59 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
         torch.float32
     )
     
-    # integration times
-    ts = torch.linspace(0, 1, n_img) # [n_img]
+    logprobs_intsteps = []
     
-    # # compute trajectory once, later pick time slices for gif
-    # nde = NeuralODE(DEFunc(torch_wrapper(model)), solver="euler").to(device)
-    # # with torch.no_grad():
-    # # [n_img, n_samples, 2]
-    # traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
-    
-    set_seaborn_style()
-    n_plots = 1
-    # integrate up to t / starting form t using n_t_span steps
-    for i, t in tqdm(enumerate(ts)):
-        fig, axes = plt.subplots(n_plots, n_models, figsize=(6 * n_models, 6 * n_plots))
-        axis = axes if n_models == 1 else axes[:, 0]
+    # integrate up to 1 / starting from 1 using intsteps steps
+    # the better the flow the faster / fewer steps still give good results
+    # will include 0 and max
+    for intsteps in torch.linspace(0, max_integration_steps, n_integration_steps): 
+        intsteps = int(intsteps)
+        
+        ### calculate log-likelihood of sample
+        if args.classcond:
+            pass
+        else:
+            cnf = DEFunc(CNF(model))
+            nde = NeuralODE(cnf, solver="euler", sensitivity="adjoint")
+            cnf_model = torch.nn.Sequential(Augmenter(augment_idx=1, augment_dims=1), nde)
+            # with torch.no_grad():
+            # x1 = sample_moons(args.eval_batch_size).to(device).requires_grad_()
+            x1 = trgtdist.sample(args.eval_batch_size).to(device).requires_grad_()
+            if intsteps > 0:
+                # integrate backwards from t=1 (tdata) to t=0 (tnoise)
+                aug_traj = (
+                cnf_model[1]
+                .to(device)
+                .trajectory(
+                    x=Augmenter(1, 1)(x1).to(device),
+                    t_span=torch.linspace(start=tdata, end=tnoise, steps=intsteps, device=device),
+                    )
+                )[-1].cpu()
+                # Compute log probabilities
+                # We can load the log probs later to plot the training progress
+                log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
+            else:
+                log_probs = sourcedist.log_prob(x1)
+            logprobs_intsteps.append([intsteps, log_probs.nanmean().item()])
+            print(f"Log-likelihood of test set: {log_probs.nanmean().item():0.3f}")
+
+        ### trajectory plot?
+        # src/sfm/plot_cfm_gif.py
         
         ### log-probability / density plot
+        fig, axis = plt.subplots(1, 1, figsize=(6, 6))
         cnf = DEFunc(CNF(model))
         nde = NeuralODE(cnf, solver="euler", sensitivity="adjoint")
         cnf_model = torch.nn.Sequential(Augmenter(augment_idx=1, augment_dims=1), nde)
         with torch.no_grad():
-            if t > 0:
+            if intsteps > 0:
                 # integrate backwards from t to 0
                 aug_traj = (
                     cnf_model[1]
                     .to(device)
                     .trajectory(
                         Augmenter(1, 1)(gridpoints).to(device),
-                        t_span=torch.linspace(start=t, end=0, steps=n_t_span, device=device),
+                        t_span=torch.linspace(start=1, end=0, steps=intsteps, device=device),
                     )
                 )[-1].cpu()
                 # log_probs = log_8gaussian_density(aug_traj[:, 1:]) - aug_traj[:, 0]
@@ -182,16 +171,17 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
         # ax.set_title(f"{args.runname}", fontsize=30)
         # can't get rid of white border, so pad a bit to make it look cleaner
         plt.tight_layout(pad=0.1) 
-        plt.savefig(f"{tempdir}/{tplotname}_{t:0.2f}.png", dpi=40)
+        plt.savefig(f"{tempdir}/{tplotname}_{intsteps}.png", dpi=40)
         plt.close()
-
+        
+        
     # load all density plots and put side by side into one figure
     fignames = [f"{tempdir}/{tplotname}_{t:0.2f}.png" for t in ts]
     images = [imageio.imread(fname) for fname in fignames]
     
     # create a new figure with subplots side by side
     n_plots = len(images)
-    fig, axes = plt.subplots(1, n_plots, figsize=(6*n_plots, 6))
+    fig, axes = plt.subplots(1, 1, figsize=(6, 6))
     # plot each image
     for i, (ax, img) in enumerate(zip(axes, images)):
         ax.imshow(img)
@@ -204,14 +194,19 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
         # ax.set_title(f"T={ts[i]:0.2f}")
     
     plt.tight_layout(pad=0.0)
-    fname = f"{args.savedir}/{combinedplotname}_sidebyside.png"
+    fname = f"{args.savedir}/{combinedplotname}.png"
     plt.savefig(fname, dpi=40)
     plt.close()
-    print(f"Saved sidebyside to\n {fname}")
+    print(f"Saved integration steps to\n {fname}")
+    
+    # save logprobs_intsteps
+    logprobs_intsteps = np.array(logprobs_intsteps)
+    np.save(f"{args.savedir}/{combinedplotname}_logprobs_intsteps.npy", logprobs_intsteps)
+    print(f"Saved logprobs_intsteps to {args.savedir}/{combinedplotname}_logprobs_intsteps.npy")
 
 @hydra.main(config_name="tcfm", config_path="./config", version_base="1.3")
 def hydra_wrapper(args: DictConfig) -> None:
-    plot_inference_sidebyside(args)
+    plot_integration_steps(args)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,13 @@
 # @package _global_
 
 source: 
+  trgt: gamma
+  
+  # if data in [0, 1]
+  # concentration: 1.0
+  # rate: 2.0
+
+  # if data in [-7, 7]
   concentration: 1.0
   rate: 2.0
-  trgt: gamma
   

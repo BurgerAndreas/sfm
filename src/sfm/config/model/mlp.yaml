@@ -1,0 +1,11 @@
+# @package _global_
+# this @package directive solves any nesting problem (if this file is included in another folder)
+
+model:
+  trgt: mlp
+  time_varying: true # MLP
+  freqs: 3 # MLP with time embedding
+  dim: 2 # MLP
+
+cpname: "mysimplemlp"
+classcond: false

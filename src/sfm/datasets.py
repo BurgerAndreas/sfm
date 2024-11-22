@@ -6,6 +6,10 @@ import torch
 import torchdyn.datasets as tdyndata
 from sklearn.datasets import make_moons, make_swiss_roll
 
+from torchvision import datasets, transforms
+from torchvision.transforms import ToPILImage
+from torchvision.utils import make_grid
+
 def tdyn_moons_nrmed01(*args, **kwargs):
     data, _ = tdyndata.generate_moons(*args, **kwargs)
     data[:, 0] = (data[:, 0] - -1.00) / (3.00)
@@ -81,6 +85,38 @@ def print_normed_func(func, *args, **kwargs):
     print(f"    return data")
     print("")
 
+########################################################################
+# MNIST
+
+class MNISTWrapper:
+    def __init__(self, **kwargs):
+        self.dmin = kwargs.get("dmin", 0)
+        self.dmax = kwargs.get("dmax", 1)
+        
+        self.trainset = datasets.MNIST(
+            "../data",
+            train=True,
+            download=True,
+            transform=transforms.Compose([
+                transforms.ToTensor(),
+                # normalize to [-1, 1]
+                transforms.Normalize((0.5,), (0.5,))
+            ])
+        )
+        
+    def sample(self, n_samples):
+        # Get random indices
+        indices = torch.randperm(len(self.trainset))[:n_samples]
+        
+        # Get samples and flatten
+        samples = torch.stack([self.trainset[i][0] for i in indices])
+        samples = samples.view(n_samples, -1)
+        
+        # Scale to [dmin, dmax] range
+        # samples = samples * (self.dmax - self.dmin) + self.dmin
+        return samples
+
+########################################################################
 
 _datasets = {
     "moons": tdyn_moons_nrmed01,

@@ -3,6 +3,7 @@ plots/*
 logs/*
 outputs/*
 runs
+data/*
 
 *.pdf
 **/*.png

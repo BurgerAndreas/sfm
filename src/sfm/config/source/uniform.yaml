@@ -4,6 +4,6 @@ source:
   trgt: uniform
 
   # if data in [0, 1]
-  low: 0.0
-  high: 1.0
+  low: -5.0
+  high: 5.0
   
