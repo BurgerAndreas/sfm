@@ -89,11 +89,24 @@ class MLPTimeEmb(torch.nn.Module):
         return self.net(x)
 
 
+class UNetWrapper(UNetModel):
+    def __init__(self, *args, **kwargs):
+        # only pass the args that are needed
+        super().__init__(
+            dim=kwargs["dim"],
+            num_channels=kwargs["num_channels"],
+            num_res_blocks=kwargs["num_res_blocks"],
+            class_cond=kwargs["class_cond"],
+            num_classes=kwargs["num_classes"],
+        )
+    
+    def forward(self, t, x, y=None):
+        return super().forward(t, x, y)
 
 _models = {
     "mlp": MLPTime,
     "mlptime": MLPTimeEmb,
-    "unet": UNetModel,
+    "unet": UNetWrapper,
 }
 
 def get_model(trgt: str, **kwargs):

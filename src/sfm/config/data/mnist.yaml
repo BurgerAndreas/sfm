@@ -4,11 +4,18 @@ data:
   trgt: mnist
 
 defaults:
-  - model: ../model/unet
+  - model: ../../model/unet
   - _self_
 
 n_trainsteps: 4680
 classcond: true
+
+eval_batch_size: 512
+plot_batch_size: 1024
+
+logfreq: 100
+evalfreq: 500
+
 
 source:
   data_dim: 784

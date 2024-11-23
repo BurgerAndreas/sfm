@@ -1,10 +1,11 @@
 # @package _global_
 # this @package directive solves any nesting problem (if this file is included in another folder)
 
+# dim=(1, 28, 28), num_channels=32, num_res_blocks=1, num_classes=10, class_cond=True
 model:
   trgt: unet
   dim: [1, 28, 28]
-  n_channels: 32
+  num_channels: 32
   num_res_blocks: 1
   num_classes: 10
   class_cond: true

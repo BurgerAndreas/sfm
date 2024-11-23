@@ -4,9 +4,9 @@
 defaults:
   # - ./source.normal
   - source: normal # normal, 8gaussian
-  - data: moons
   - model: mlp
   - _self_
+  - data: moons
 
 task: all # all, train, gif, sidebyside
 
@@ -37,6 +37,8 @@ data:
   dmin: -5 # domain for data
   dmax: 5
 
+source:
+  data_dim: 2
 
 # computational
 force_cpu: false

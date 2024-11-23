@@ -5,7 +5,7 @@ outputs/*
 runs
 data/*
 
-learn1
+learn
 
 *.pdf
 **/*.png

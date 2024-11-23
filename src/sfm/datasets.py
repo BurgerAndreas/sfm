@@ -104,7 +104,7 @@ class MNISTWrapper:
             ])
         )
         
-    def sample(self, n_samples):
+    def sample(self, n_samples) -> tuple[torch.Tensor, torch.Tensor]:
         # Get random indices
         indices = torch.randperm(len(self.trainset))[:n_samples]
         
@@ -112,9 +112,13 @@ class MNISTWrapper:
         samples = torch.stack([self.trainset[i][0] for i in indices])
         samples = samples.view(n_samples, -1)
         
+        labels = torch.tensor([self.trainset[i][1] for i in indices])
+        # (n_samples,) -> (n_samples)
+        labels = labels.view(n_samples)
+        
         # Scale to [dmin, dmax] range
         # samples = samples * (self.dmax - self.dmin) + self.dmin
-        return samples
+        return samples, labels
 
 ########################################################################
 
