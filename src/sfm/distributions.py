@@ -66,7 +66,9 @@ class CoupledSourceDistribution(SourceDistribution):
             return self._sampleMultiDim(nsamples)
 
     def _sampleMultiDim(self, nsamples: int | tuple) -> Tensor:
+        # not a good idea but ensures that the sample has the correct shape
         # per default call the 2d sampler and concatenate the result
+        # each sample has shape [B, 2] -> [B, D]
         return torch.cat([self._sample2d(nsamples) for _ in range(self.data_dim // 2)], dim=-1)
     
     def _sample2d(self, nsamples: int | tuple) -> Tensor:
@@ -131,7 +133,7 @@ class GaussianSource(CoupledSourceDistribution):
         super().__init__(data_dim, **kwargs)
         mu = torch.as_tensor(mu)
         Sigma = torch.as_tensor(Sigma)
-        assert Sigma.shape == (data_dim, data_dim), f"Sigma has wrong shape {Sigma.shape}"
+        # assert Sigma.shape == (data_dim, data_dim), f"Sigma has wrong shape {Sigma.shape}"
         self.dist = torch.distributions.MultivariateNormal(mu, Sigma)
 
 
@@ -372,12 +374,13 @@ class WeibullSource(SourceDistribution):
 # "Data" distributions
 
 
-class EightGaussiansDistribution(SourceDistribution): 
+class EightGaussiansDistribution(CoupledSourceDistribution): 
     def __init__(self, data_dim: int = 2, device: str = "cpu", scale: float = 0.8, var: float = 0.001, dtype: torch.dtype = torch.float32, **kwargs):
         super().__init__(data_dim, device, **kwargs)
         self.scale = scale
         # Scale variance proportionally to scale^2 to maintain relative spread
         self.var = var * (scale ** 4)
+        # [8, 2]
         self.centers = torch.tensor([
             (1, 0),
             (-1, 0),
@@ -390,11 +393,12 @@ class EightGaussiansDistribution(SourceDistribution):
         ], device=self.device, dtype=dtype) * self.scale
 
     def log_prob(self, x: torch.Tensor) -> torch.Tensor:
-        centers = self.centers.T.reshape(1, 2, 8)
+        device = x.device
+        centers = self.centers.T.reshape(1, 2, 8).to(device)
         x = (x[:, :, None] - centers).mT
         m = torch.distributions.multivariate_normal.MultivariateNormal(
-            loc=torch.zeros(x.shape[-1], device=self.device), 
-            covariance_matrix=math.sqrt(self.var) * torch.eye(x.shape[-1], device=self.device)
+            loc=torch.zeros(x.shape[-1], device=device), 
+            covariance_matrix=math.sqrt(self.var) * torch.eye(x.shape[-1], device=device)
         )
         log_probs = m.log_prob(x)
         log_probs = torch.logsumexp(log_probs, -1)
@@ -402,8 +406,8 @@ class EightGaussiansDistribution(SourceDistribution):
 
     def _sample2d(self, nsamples: int) -> torch.Tensor:
         m = torch.distributions.multivariate_normal.MultivariateNormal(
-            loc=torch.zeros(self.data_dim, device=self.device), 
-            covariance_matrix=math.sqrt(self.var) * torch.eye(self.data_dim, device=self.device)
+            loc=torch.zeros(2, device=self.device), 
+            covariance_matrix=math.sqrt(self.var) * torch.eye(2, device=self.device)
         )
         noise = m.sample((nsamples,))
         multi = torch.multinomial(torch.ones(8, device=self.device), nsamples, replacement=True)
@@ -435,6 +439,9 @@ class DataFittedNormal(CoupledSourceDistribution):
             loc=mean.to(device),
             scale=std.to(device)
         )
+    
+    def sample(self, nsamples: int | tuple) -> Tensor:
+        return self._sample2d(nsamples)
 
 ##############################################################################
 

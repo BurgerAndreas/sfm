@@ -48,6 +48,9 @@ runname: null
 # log-prob, quiver (velocity field), trajectory
 doplot: [False, False, True]
 
+# force retraining even if the model already exists
+force_retrain: false
+
 # logging
 logger: null # neptune, wandb
 tags: null

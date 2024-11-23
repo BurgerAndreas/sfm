@@ -127,6 +127,13 @@ def train_cfm(args: DictConfig):
     if args.force_cpu:
         device = torch.device("cpu")
     print("Using device:", device)
+    
+    if os.path.exists(get_model_name(args)):
+        if args.force_retrain:
+            print(f"Force retraining: {get_model_name(args)}")
+        else:
+            print(f"Model already exists: {get_model_name(args)}")
+            return
 
     ot_sampler = OTPlanSampler(method="exact")
     sigma = 0.1 # for flow matching

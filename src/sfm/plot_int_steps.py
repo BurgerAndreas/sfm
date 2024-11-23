@@ -62,8 +62,8 @@ def plot_integration_steps(args: DictConfig) -> None:
     cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"), weights_only=True)
     model.load_state_dict(cp)
     
-    trgtdist = get_dataset(**args.data)
-    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist)
+    trgtdist = get_dataset(**args.data, device=device)
+    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist, device=device)
 
     # sample noise
     # sample = sample_8gaussians(n_samples) # [n_samples, 2]
