@@ -16,6 +16,7 @@ from sfm.plot_int_steps import plot_integration_steps
 @hydra.main(config_name="tcfm", config_path="../src/sfm/config", version_base="1.3")
 def hydra_wrapper(args: DictConfig) -> None:
     # data=mnist
+    print("\n" + "="*60 + "\n")
     
     # set up names for files and directories
     proj_dir = os.path.dirname(os.path.dirname(__file__))
@@ -36,12 +37,12 @@ def hydra_wrapper(args: DictConfig) -> None:
     # run the task
     if args.task in ["train", "all"]:
         train_cfm(args)
-    if args.task in ["gif", "all"]:
+    if args.task in ["gif", "all", "notrain"]:
         plot_cfm_gif(args)
-    if args.task in ["int", "all"]:
+    if args.task in ["int", "all", "notrain"]:
         # task=int plot_integration_steps=6
         plot_integration_steps(args)
-    if args.task in ["sidebyside", "all"]:
+    if args.task in ["sidebyside", "all", "notrain"]:
         plot_inference_sidebyside(args)
     
     print(f"\n === Task '{args.task}' done ✅ ===\n")

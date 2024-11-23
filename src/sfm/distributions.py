@@ -16,10 +16,11 @@ from zuko.utils import odeint
 
 
 class SourceDistribution:
-    def __init__(self, data_dim: int = 2, device: str = "cpu", **kwargs):
+    def __init__(self, data_dim: int = 2, device: str = "cpu", dtype: torch.dtype = torch.float32, **kwargs):
         assert data_dim > 0 and data_dim % 2 == 0, "data_dim must be a positive even number"
         self.data_dim = data_dim
         self.device = device
+        self.dtype = dtype
         self.dist = None
 
     def log_prob(self, x: Tensor) -> Tensor:
@@ -414,6 +415,28 @@ class EightGaussiansDistribution(SourceDistribution):
 
 
 ##############################################################################
+# Distributions computed on the fly from the data
+
+class DataFittedNormal(CoupledSourceDistribution):
+    def __init__(self, trgtdist, data_dim: int = 2, device: str = "cpu", dtype: torch.dtype = torch.float32, **kwargs):
+        super().__init__(data_dim, device, dtype, **kwargs)
+        # Fit a Gaussian to the training data
+        if hasattr(trgtdist, "trainset"):
+            all_data = torch.stack([data[0] for data in trgtdist.trainset], dim=0).view(-1, 28*28)
+        else:
+            # sample from target distribution
+            all_data = trgtdist.sample(10000)
+        mean = all_data.mean(dim=0) # [784]
+        std = all_data.std(dim=0) # [784]
+        std = std.clamp(min=1e-5)  # ensure positive std values
+
+        # Create source distribution as multivariate normal with same mean/std as data
+        self.dist = torch.distributions.Normal(
+            loc=mean.to(device),
+            scale=std.to(device)
+        )
+
+##############################################################################
 
 _distributions = {
     "uniform": UniformSource,
@@ -444,6 +467,8 @@ _distributions = {
     "vonmises": VonMisesSource,
     "weibull": WeibullSource,
     "8gaussians": EightGaussiansDistribution,
+    # Data fitted distributions
+    "datafittednormal": DataFittedNormal,
 }
 
 def get_source_distribution(trgt: str = "gaussian", **kwargs):

@@ -62,14 +62,14 @@ def plot_integration_steps(args: DictConfig) -> None:
     cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"), weights_only=True)
     model.load_state_dict(cp)
     
-    sourcedist = get_source_distribution(**args.source)
+    trgtdist = get_dataset(**args.data)
+    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist)
 
     # sample noise
     # sample = sample_8gaussians(n_samples) # [n_samples, 2]
     sample = sourcedist.sample(n_samples) # [n_samples, 2]
     assert sample.shape == (n_samples, 2), f"sample.shape: {sample.shape}"
 
-    trgtdist = get_dataset(**args.data)
     
     # plotting stuff for log-prob plot
     points = 100j

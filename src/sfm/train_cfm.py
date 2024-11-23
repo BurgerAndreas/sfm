@@ -54,7 +54,7 @@ def get_loss_name(args: DictConfig):
 def get_model_name(args: DictConfig):
     return f"{args.savedir}/{args.cpname}.pth"
 
-def eval_traj(args: DictConfig, model, node, device, sourcedist, tnoise, tdata, nintsteps):
+def eval_traj(args: DictConfig, model, node, device, sourcedist, tnoise, tdata, nintsteps, k):
     with torch.no_grad():
         if args.classcond:
             traj = None # TODO: implement
@@ -88,7 +88,7 @@ def eval_traj(args: DictConfig, model, node, device, sourcedist, tnoise, tdata, 
             print(f"Saved trajectory to {get_trajplot_name(args, k)}")
     return traj
 
-def eval_logprob(args: DictConfig, model, device, sourcedist, trgtdist, tnoise, tdata, nintsteps, logprobs_train):
+def eval_logprob(args: DictConfig, model, device, sourcedist, trgtdist, tnoise, tdata, nintsteps, logprobs_train, k):
     # starting from target points, integrate backwards from t=1 to t=0 to get the source points
     # compute the log-likelihood using the source distribution and the trace term
     if args.classcond:
@@ -135,8 +135,8 @@ def train_cfm(args: DictConfig):
     tnoise = 0 # noise time
     tdata = 1 # data time
 
-    sourcedist = get_source_distribution(**args.source)
     trgtdist = get_dataset(**args.data)
+    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist)
     
     if args.source.data_dim == 2:
         # plot the target distribution
@@ -245,10 +245,10 @@ def train_cfm(args: DictConfig):
             tqdm.write(f"{k+1}: loss {loss.item():0.3f} time {(end - start):0.2f}")
             start = end
             # generate samples and plot trajectories
-            eval_traj(args, model, node, device, sourcedist, tnoise, tdata, nintsteps)
+            eval_traj(args, model, node, device, sourcedist, tnoise, tdata, nintsteps, k)
             
             # compute log-likelihood of test set
-            logprobs_train = eval_logprob(args, model, device, sourcedist, trgtdist, tnoise, tdata, nintsteps, logprobs_train)
+            logprobs_train = eval_logprob(args, model, device, sourcedist, trgtdist, tnoise, tdata, nintsteps, logprobs_train, k)
 
     # save model
     torch.save(model.state_dict(), get_model_name(args))

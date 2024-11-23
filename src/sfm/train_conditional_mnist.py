@@ -10,6 +10,9 @@ from torchvision.transforms import ToPILImage
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
+import hydra
+from omegaconf import DictConfig
+
 from torchcfm.conditional_flow_matching import ExactOptimalTransportConditionalFlowMatcher, ConditionalFlowMatcher
 from torchcfm.models.unet import UNetModel
 
@@ -42,6 +45,18 @@ def train_conditional_mnist(args: DictConfig) -> None:
 
     train_loader = torch.utils.data.DataLoader(
         trainset, batch_size=batch_size, shuffle=True, drop_last=True
+    )
+    
+    # Fit a Gaussian to the training data
+    all_data = torch.stack([data[0] for data in train_loader], dim=0).view(-1, 28*28)
+    mean = all_data.mean(dim=0) # [784]
+    std = all_data.std(dim=0) # [784]
+    std = std.clamp(min=1e-5)  # ensure positive std values
+
+    # Create source distribution as multivariate normal with same mean/std as data
+    source_dist = torch.distributions.Normal(
+        loc=mean.to(device),
+        scale=std.to(device)
     )
 
     #################################

@@ -14,9 +14,30 @@ ots=(True False)
 
 for use_ot in "${ots[@]}"; do
     for source in "${sources[@]}"; do
-        python scripts/tcfm.py source=${source} task=all use_ot=${use_ot}
+        # python scripts/tcfm.py source=${source} task=all use_ot=${use_ot}
     done
 done
+
+# doesnt work: "8gaussians" "gaussian"
+sources=("gamma" "beta" "diagonal" "laplace" "normal" "uniform" "mog" "multivariate")
+ots=(True False)
+for use_ot in "${ots[@]}"; do
+    for source in "${sources[@]}"; do
+        python scripts/tcfm.py source=${source} task=train use_ot=${use_ot} data=mnist
+    done
+done
+#   File "/ssd/gen/fm/src/sfm/train_cfm.py", line 184, in train_cfm
+#     x0 = sourcedist.sample(args.batch_size).to(device)
+#          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#   File "/ssd/gen/fm/src/sfm/distributions.py", line 38, in sample
+#     return self._sample2d(nsamples)
+#            ^^^^^^^^^^^^^^^^^^^^^^^^
+#   File "/ssd/gen/fm/src/sfm/distributions.py", line 411, in _sample2d
+#     data.append(self.centers[multi[i]] + noise[i])
+#                 ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~
+# RuntimeError: The size of tensor a (2) must match the size of tensor b (784) at non-singleton dimension 0
+
+# Sigma has wrong shape 2,2
 ```
 
 ## Installation

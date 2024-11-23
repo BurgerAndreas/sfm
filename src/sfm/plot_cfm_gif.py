@@ -20,6 +20,7 @@ from torchcfm.models.models import MLP, GradModel
 from torchcfm.utils import torch_wrapper
 
 from sfm.distributions import get_source_distribution
+from sfm.datasets import get_dataset
 from sfm.tcfmhelpers import CNF
 from sfm.plotstyle import _cscheme
 from sfm.networks import get_model
@@ -81,7 +82,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
     cp = torch.load(os.path.join(args.savedir, args.cpname + ".pth"), weights_only=True)
     model.load_state_dict(cp)
     
-    sourcedist = get_source_distribution(**args.source)
+    trgtdist = get_dataset(**args.data)
+    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist)
 
     # sample noise
     # sample = sample_8gaussians(n_samples) # [n_samples, 2]
