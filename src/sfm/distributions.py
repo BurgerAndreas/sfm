@@ -17,6 +17,7 @@ from zuko.utils import odeint
 
 class SourceDistribution:
     def __init__(self, data_dim: int = 2, device: str = "cpu", **kwargs):
+        assert data_dim > 0 and data_dim % 2 == 0, "data_dim must be a positive even number"
         self.data_dim = data_dim
         self.device = device
         self.dist = None
@@ -34,6 +35,9 @@ class SourceDistribution:
         return self.dist.log_prob(x).sum(dim=-1)
 
     def sample(self, nsamples: int | tuple) -> Tensor:
+        return self._sample2d(nsamples)
+
+    def _sample2d(self, nsamples: int | tuple) -> Tensor:
         """
         Draw samples from the distribution.
 
@@ -55,6 +59,16 @@ class CoupledSourceDistribution(SourceDistribution):
         return self.dist.log_prob(x)
 
     def sample(self, nsamples: int | tuple) -> Tensor:
+        if self.data_dim == 2:
+            return self._sample2d(nsamples)
+        else:
+            return self._sampleMultiDim(nsamples)
+
+    def _sampleMultiDim(self, nsamples: int | tuple) -> Tensor:
+        # per default call the 2d sampler and concatenate the result
+        return torch.cat([self._sample2d(nsamples) for _ in range(self.data_dim // 2)], dim=-1)
+    
+    def _sample2d(self, nsamples: int | tuple) -> Tensor:
         return self.dist.sample((nsamples,))
 
 
@@ -328,7 +342,7 @@ class RelaxedBernoulliSource(SourceDistribution):
         # assert self.temperature.shape == (data_dim,), f"Temperature has wrong shape {self.temperature.shape}"
         self.dist = torch.distributions.RelaxedBernoulli(temperature=self.temperature, logits=self.logits)
 
-    def sample(self, nsamples: int | tuple) -> Tensor:
+    def _sample2d(self, nsamples: int | tuple) -> Tensor:
         return self.dist.sample((nsamples,))
 
 
@@ -385,7 +399,7 @@ class EightGaussiansDistribution(SourceDistribution):
         log_probs = torch.logsumexp(log_probs, -1)
         return log_probs
 
-    def sample(self, nsamples: int) -> torch.Tensor:
+    def _sample2d(self, nsamples: int) -> torch.Tensor:
         m = torch.distributions.multivariate_normal.MultivariateNormal(
             loc=torch.zeros(self.data_dim, device=self.device), 
             covariance_matrix=math.sqrt(self.var) * torch.eye(self.data_dim, device=self.device)

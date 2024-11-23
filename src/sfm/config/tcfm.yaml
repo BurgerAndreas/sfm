@@ -1,7 +1,6 @@
 # @package _global_
 # this @package directive solves any nesting problem (if this file is included in another folder)
 
-# use source/normal.yaml
 defaults:
   # - ./source.normal
   - source: normal # normal, 8gaussian
@@ -11,6 +10,7 @@ defaults:
 
 task: all # all, train, gif, sidebyside
 
+datadim: 2
 
 n_trainsteps: 10000
 batch_size: 256

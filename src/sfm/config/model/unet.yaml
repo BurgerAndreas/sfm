@@ -10,4 +10,3 @@ model:
   class_cond: true
 
 cpname: "tcfmunet"
-classcond: true

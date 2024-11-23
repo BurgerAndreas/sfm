@@ -5,6 +5,8 @@ outputs/*
 runs
 data/*
 
+learn1
+
 *.pdf
 **/*.png
 **/*.svg

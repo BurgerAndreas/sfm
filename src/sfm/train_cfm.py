@@ -77,20 +77,21 @@ def train_cfm(args: DictConfig):
     sourcedist = get_source_distribution(**args.source)
     trgtdist = get_dataset(**args.data)
     
-    # plot the target distribution
-    # plot target distribution samples
-    noise = sourcedist.sample(1000).cpu().numpy()
-    samples = trgtdist.sample(1000).cpu().numpy()
-    set_seaborn_style()
-    fig = plt.figure(figsize=(6,6))
-    plt.scatter(samples[:,0], samples[:,1], alpha=0.5, s=2)
-    set_style_after(ax=fig.gca())
-    plt.savefig(f"{args.savedir}/targetdist.png")
-    print(f"Saved {args.savedir}/targetdist.png")
-    plt.scatter(noise[:,0], noise[:,1], alpha=0.5, s=2)
-    plt.savefig(f"{args.savedir}/srctrgt.png")
-    print(f"Saved {args.savedir}/srctrgt.png")
-    plt.close()
+    if args.source.data_dim == 2:
+        # plot the target distribution
+        # plot target distribution samples
+        noise = sourcedist.sample(1000).cpu().numpy() #
+        samples = trgtdist.sample(1000).cpu().numpy()
+        set_seaborn_style()
+        fig = plt.figure(figsize=(6,6))
+        plt.scatter(samples[:,0], samples[:,1], alpha=0.5, s=2)
+        set_style_after(ax=fig.gca())
+        plt.savefig(f"{args.savedir}/targetdist.png")
+        print(f"Saved {args.savedir}/targetdist.png")
+        plt.scatter(noise[:,0], noise[:,1], alpha=0.5, s=2)
+        plt.savefig(f"{args.savedir}/srctrgt.png")
+        print(f"Saved {args.savedir}/srctrgt.png")
+        plt.close()
     
     model = get_model(**args.model).to(device)
 
@@ -120,7 +121,7 @@ def train_cfm(args: DictConfig):
         # sample source distribution [B, D]
         # x0 = sample_8gaussians(args.batch_size).to(device)
         x0 = sourcedist.sample(args.batch_size).to(device)
-        assert x0.shape == (args.batch_size, dim)
+        
         # sample target distribution [B, D]
         # x1 = sample_moons(args.batch_size).to(device)
         x1 = trgtdist.sample(args.batch_size)

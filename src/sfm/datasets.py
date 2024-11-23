@@ -147,7 +147,10 @@ class DatasetDummy:
         return samples
 
 def get_dataset(trgt: str, *args, **kwargs):
-    return DatasetDummy(trgt, *args, **kwargs)
+    if trgt == "mnist":
+        return MNISTWrapper(**kwargs)
+    else:
+        return DatasetDummy(trgt, *args, **kwargs)
 
 if __name__ == "__main__":
     # print new function for normalized data
