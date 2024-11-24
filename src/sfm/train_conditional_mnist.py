@@ -112,16 +112,20 @@ def train_conditional_mnist(args: DictConfig) -> None:
     # save model
     torch.save(model.state_dict(), f"{savedir}/{runname}.pth")
     
-    eval_batch_size = 10
+    sqrt_eval_batch_size = 10
+    evalbs = sqrt_eval_batch_size**2
     
     # generate samples 
-    generated_class_list = torch.arange(10, device=device).repeat(eval_batch_size // 10 + 1) # [100]
-    generated_class_list = generated_class_list[:eval_batch_size]
+    generated_class_list = torch.arange(10, device=device).repeat(sqrt_eval_batch_size // 10 + 1) # [100]
+    generated_class_list = generated_class_list[:sqrt_eval_batch_size]
     with torch.no_grad():
+        y0 = source_dist.sample(evalbs).to(device)
+        # reshape to [evalbs, *d_img]
+        y0 = y0.view(evalbs, *d_img)
         if USE_TORCH_DIFFEQ:
             traj = torchdiffeq.odeint(
                 func=lambda t, x: model.forward(t, x, generated_class_list),
-                y0=torch.randn(eval_batch_size, *d_img, device=device), # TODO@Source
+                y0=y0,
                 # t is not the integration steps but the time points for which to solve for
                 # The first element of is taken to be the initial time point
                 t=torch.linspace(0, 1, 2, device=device),
@@ -134,12 +138,12 @@ def train_conditional_mnist(args: DictConfig) -> None:
             )
         else:
             traj = node.trajectory(
-                x=torch.randn(eval_batch_size, *d_img, device=device), # TODO@Source
+                x=y0,
                 t_span=torch.linspace(0, 1, 2, device=device),
             )
     grid = make_grid(
-        traj[-1, :eval_batch_size].view([-1, *d_img]).clip(-1, 1), 
-        value_range=(-1, 1), padding=0, nrow=10
+        traj[-1, :evalbs].view([-1, *d_img]).clip(-1, 1), 
+        value_range=(-1, 1), padding=0, nrow=sqrt_eval_batch_size
     )
     img = ToPILImage()(grid)
     plt.imshow(img)

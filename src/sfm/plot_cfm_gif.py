@@ -115,7 +115,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
         # plot sample as image
         d_img = (1, 28, 28)
         grid = make_grid(
-            sample[-1, :nsamples].view([-1, *d_img]).clip(-1, 1), 
+            sample[:100].view([-1, *d_img]).clip(-1, 1), 
             value_range=(-1, 1), padding=0, nrow=10
         )
         img = ToPILImage()(grid)
@@ -152,7 +152,19 @@ def plot_cfm_gif(args: DictConfig) -> None:
                 # for a fixed step solver, we need to specify the step size
                 # method="euler", # euler, midpoint, rk4, heun3
                 # options={"step_size": 1/intsteps},
-            ).detach().cpu().numpy()
+            )
+        grid = make_grid(
+        # traj[-1, :100].view([-1, 1, 28, 28]
+        traj[-1, :100].view([-1, *d_img]).clip(-1, 1), 
+            value_range=(-1, 1), padding=0, nrow=10
+        )
+        img = ToPILImage()(grid)
+        plt.xticks([])
+        plt.yticks([])
+        plt.tight_layout(pad=0.0)
+        plt.imshow(img)
+        plt.savefig(f"{args.savedir}/gif/gentrajfinal.png", dpi=400)
+        plt.close()
     else:
         nde = tdyn.NeuralODE(tdyn.DEFunc(torch_wrapper(model)), solver="euler").to(device)
         # with torch.no_grad():
@@ -233,11 +245,14 @@ def plot_cfm_gif(args: DictConfig) -> None:
             ax = axis[iplot] if n_plots > 1 else axis
             if args.classcond:
                 grid = make_grid(
-                    traj[i, :nsamples].view([-1, *d_img]).clip(-1, 1), 
+                    # traj[-1, :100].view([-1, 1, 28, 28]
+                    traj[i, :100].view([-1, *d_img]).clip(-1, 1), 
                     value_range=(-1, 1), padding=0, nrow=10
                 )
                 img = ToPILImage()(grid)
                 ax.imshow(img)
+                ax.set_xticks([])
+                ax.set_yticks([])
             else:
                 ax.scatter(traj[:i, :, 0], traj[:i, :, 1], s=0.2, alpha=0.2, c=_cscheme["flow"])
                 ax.scatter(traj[0, :, 0], traj[0, :, 1], s=10, alpha=0.8, c=_cscheme["prior"])

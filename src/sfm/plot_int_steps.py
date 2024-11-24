@@ -205,7 +205,7 @@ def plot_integration_steps(args: DictConfig) -> None:
                 # [nsamples, h*w]
                 traj = sourcedist.sample(nsamples)
             grid = make_grid(
-                traj[:nsamples].view([-1, *d_img]).clip(-1, 1), 
+                traj[:100].view([-1, *d_img]).clip(-1, 1), 
                 value_range=(-1, 1), padding=0, nrow=10
             )
             img = ToPILImage()(grid)
