@@ -16,7 +16,7 @@ n_trainsteps: 10000
 batch_size: 256
 eval_batch_size: 2048
 plot_batch_size: 1024
-plot_integration_steps: 201 # for gif and sidebyside
+plot_integration_steps: 11 # for gif and sidebyside
 eval_integration_steps: 100 # for training
 
 use_slcf: true # True works better

@@ -59,8 +59,10 @@ class MLPTime(torch.nn.Module):
             torch.nn.SELU(),
             torch.nn.Linear(w, out_dim),
         )
-
+        self.nfe = 0
+        
     def forward(self, x):
+        self.nfe += 1
         return self.net(x)
 
 class MLPTimeEmb(torch.nn.Module):
@@ -79,8 +81,10 @@ class MLPTimeEmb(torch.nn.Module):
             torch.nn.SELU(),
             torch.nn.Linear(w, out_dim),
         )
-
+        self.nfe = 0
+        
     def forward(self, x):
+        self.nfe += 1
         # Encode time with sinusoidal features to capture periodicity
         # The last dimension of x is the time t
         t = self.freqs * x[..., -1:] * torch.pi  # [B, D]
@@ -99,8 +103,11 @@ class UNetWrapper(UNetModel):
             class_cond=kwargs["class_cond"],
             num_classes=kwargs["num_classes"],
         )
+        # number of function evaluations = number of calls to the model
+        self.nfe = 0
     
     def forward(self, t, x, y=None):
+        self.nfe += 1
         return super().forward(t, x, y)
 
 _models = {

@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 
 from sfm.train_cfm import train_cfm
 from sfm.plot_cfm_gif import plot_cfm_gif
-from sfm.plot_inference_sidebyside import plot_inference_sidebyside
+from sfm.plot_density_traj_sidebyside import plot_density_traj_sidebyside
 from sfm.plot_int_steps import plot_integration_steps
 
 
@@ -43,7 +43,7 @@ def hydra_wrapper(args: DictConfig) -> None:
         # task=int plot_integration_steps=6
         plot_integration_steps(args)
     if args.task in ["sidebyside", "all", "notrain"]:
-        plot_inference_sidebyside(args)
+        plot_density_traj_sidebyside(args)
     
     print(f"\n === Task '{args.task}' done ✅ ===\n")
 

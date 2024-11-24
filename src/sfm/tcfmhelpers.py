@@ -1,4 +1,7 @@
 import torch
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sfm.plotstyle import _cscheme
 
 # from Flow_matching_tutorial.ipynb
 def sample_conditional_pt(x0, x1, t, sigma, device):
@@ -82,3 +85,30 @@ class CNF(torch.nn.Module):
         return (
             torch.cat([-trJ[:, None], x_out], 1) + 0 * x
         )  # `+ 0*x` has the only purpose of connecting x[:, 0] to autograd graph
+
+
+def plot_trajectories(traj, n=2000, show=False, prior=True):
+    """Plot trajectories of some selected samples."""
+    # adapted from conditional-flow-matching/torchcfm/utils.py
+    # n: max points to plot
+    
+    fig = plt.figure(figsize=(6, 6))
+    if len(traj.shape) == 2:
+        # there is no flow
+        if prior:
+            plt.scatter(traj[:n, 0], traj[:n, 1], s=10, alpha=0.8, c=_cscheme["prior"])
+            plt.legend(["Prior sample z(S)"])
+        else:
+            plt.scatter(traj[:n, 0], traj[:n, 1], s=4, alpha=1, c=_cscheme["final"])
+            plt.legend(["z(0)"])
+    else:
+        plt.scatter(traj[:, :n, 0], traj[:, :n, 1], s=0.2, alpha=0.2, c=_cscheme["flow"])
+        plt.scatter(traj[0, :n, 0], traj[0, :n, 1], s=10, alpha=0.8, c=_cscheme["prior"])
+        plt.scatter(traj[-1, :n, 0], traj[-1, :n, 1], s=4, alpha=1, c=_cscheme["final"])
+        plt.legend(["Flow", "Prior sample z(S)", "z(0)"])
+    plt.xticks([])
+    plt.yticks([])
+    plt.tight_layout(pad=0.0)
+    if show:
+        plt.show()
+    return fig

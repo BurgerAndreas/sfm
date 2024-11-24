@@ -18,6 +18,17 @@ from torchcfm.models.unet import UNetModel
 
 from sfm.loggingwrapper import LoggingWrapper
 
+
+# for node.trajcetory
+# SOLVER_DICT = {
+#     'euler': Euler, 'midpoint': Midpoint,
+#     'rk4': RungeKutta4, 'rk-4': RungeKutta4, 'RungeKutta4': RungeKutta4,
+#     'dopri5': DormandPrince45, 'DormandPrince45': DormandPrince45, 'DormandPrince5': DormandPrince45,
+#     'tsit5': Tsitouras45, 'Tsitouras45': Tsitouras45, 'Tsitouras5': Tsitouras45,
+#     'ieuler': ImplicitEuler, 'implicit_euler': ImplicitEuler,
+#     'alf': AsynchronousLeapfrog, 'AsynchronousLeapfrog': AsynchronousLeapfrog
+# }
+
 def train_conditional_mnist(args: DictConfig) -> None:
     savedir = "models/cond_mnist"
     os.makedirs(savedir, exist_ok=True)
@@ -101,25 +112,34 @@ def train_conditional_mnist(args: DictConfig) -> None:
     # save model
     torch.save(model.state_dict(), f"{savedir}/{runname}.pth")
     
-    # generate samples and plot trajectories
-    generated_class_list = torch.arange(10, device=device).repeat(10)
+    eval_batch_size = 10
+    
+    # generate samples 
+    generated_class_list = torch.arange(10, device=device).repeat(eval_batch_size // 10 + 1) # [100]
+    generated_class_list = generated_class_list[:eval_batch_size]
     with torch.no_grad():
         if USE_TORCH_DIFFEQ:
             traj = torchdiffeq.odeint(
                 func=lambda t, x: model.forward(t, x, generated_class_list),
-                y0=torch.randn(100, *d_img, device=device), # TODO@Source
+                y0=torch.randn(eval_batch_size, *d_img, device=device), # TODO@Source
+                # t is not the integration steps but the time points for which to solve for
+                # The first element of is taken to be the initial time point
                 t=torch.linspace(0, 1, 2, device=device),
                 atol=1e-4,
                 rtol=1e-4,
-                method="dopri5",
+                method="dopri5", # default solver
+                # for a fixed step solver, we need to specify the step size
+                # method="euler", # euler, midpoint, rk4, heun3
+                # step_size=0.01,
             )
         else:
             traj = node.trajectory(
-                x=torch.randn(100, *d_img, device=device), # TODO@Source
+                x=torch.randn(eval_batch_size, *d_img, device=device), # TODO@Source
                 t_span=torch.linspace(0, 1, 2, device=device),
             )
     grid = make_grid(
-        traj[-1, :100].view([-1, *d_img]).clip(-1, 1), value_range=(-1, 1), padding=0, nrow=10
+        traj[-1, :eval_batch_size].view([-1, *d_img]).clip(-1, 1), 
+        value_range=(-1, 1), padding=0, nrow=10
     )
     img = ToPILImage()(grid)
     plt.imshow(img)

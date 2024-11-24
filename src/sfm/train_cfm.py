@@ -29,7 +29,7 @@ from omegaconf import DictConfig
 from torchcfm.conditional_flow_matching import ConditionalFlowMatcher, ExactOptimalTransportConditionalFlowMatcher
 
 import torchcfm.models.models as tcfm_models
-from torchcfm.utils import plot_trajectories, torch_wrapper
+from torchcfm.utils import torch_wrapper
 
 from torchcfm.optimal_transport import OTPlanSampler
 
@@ -38,7 +38,7 @@ from sfm.flowmodel import ContNormFlow
 from sfm.distributions import get_source_distribution
 from sfm.datasets import sample_dataset, get_dataset
 from sfm.tcfmhelpers import sample_conditional_pt, compute_conditional_vector_field
-from sfm.tcfmhelpers import CNF
+from sfm.tcfmhelpers import CNF, plot_trajectories
 from sfm.plotstyle import set_seaborn_style, set_style_after
 
 def get_trajplot_name(args: DictConfig, k: int):
@@ -57,7 +57,6 @@ def get_model_name(args: DictConfig):
 def eval_traj(args: DictConfig, model, node, device, sourcedist, tnoise, tdata, nintsteps, k):
     with torch.no_grad():
         if args.classcond:
-            traj = None # TODO: implement
             # y0: torch.Size([B, 1, 28, 28])
             y0 = sourcedist.sample(args.eval_batch_size).to(device)
             y0 = y0.view(y0.shape[0], 1, 28, 28)
@@ -73,7 +72,19 @@ def eval_traj(args: DictConfig, model, node, device, sourcedist, tnoise, tdata, 
                 method="dopri5",
             )
             # MNIST: (2, B, 1, 28, 28) 
-            # TODO: plot
+            # only plot the last time step
+            nrows = 3
+            _gen = traj[-1].cpu().numpy()[:nrows**2]
+            # choose first 9 samples, and plot them in a 3x3 grid
+            grid = make_grid(
+                _gen.view([-1, *(1, 28, 28)]).clip(-1, 1), 
+                value_range=(-1, 1), padding=0, nrow=nrows
+            )
+            img = ToPILImage()(grid)
+            plt.imshow(img)
+            plt.savefig(get_trajplot_name(args, k))
+            plt.close()
+            print(f"Saved trajectory to {get_trajplot_name(args, k)}")
         else:
             # [T, B, D]
             traj = node.trajectory(

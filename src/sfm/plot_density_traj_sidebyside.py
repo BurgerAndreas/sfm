@@ -68,8 +68,8 @@ def plot_samples(args: DictConfig, sample: Tensor) -> None:
     print(f"Saved kde to\n {fname}")
     plt.close()
 
-def plot_inference_sidebyside(args: DictConfig) -> None:
-    print(f"Plotting inference sidebyside for {args.runname}\n")
+def plot_density_traj_sidebyside(args: DictConfig) -> None:
+    print("\n" + "-" * 80 + f"\nPlotting density sidebyside for {args.runname}\n")
     
     limmin = args.plim[0]
     limmax = args.plim[1]
@@ -77,6 +77,10 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if args.force_cpu:
         device = "cpu"
+    
+    if args.classcond:
+        print(" -- Stopping sidebyside because class conditional with log-prob is not implemented yet")
+        return
     
     # folder with temporary trajectory plots
     tempdir = f"{args.savedir}/sidebyside"
@@ -103,7 +107,6 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     # sample noise
     # sample = sample_8gaussians(n_samples) # [n_samples, 2]
     sample = sourcedist.sample(n_samples) # [n_samples, 2]
-    assert sample.shape == (n_samples, 2), f"sample.shape: {sample.shape}"
     plot_samples(args, sample)
     
     # plotting stuff for log-prob plot
@@ -120,7 +123,7 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
     )
     
     # integration times
-    ts = torch.linspace(0, 1, n_img) # [n_img]
+    ts = torch.linspace(0, 1, n_img, device=device) # [n_img]
     
     # # compute trajectory once, later pick time slices for gif
     # nde = NeuralODE(DEFunc(torch_wrapper(model)), solver="euler").to(device)
@@ -213,7 +216,7 @@ def plot_inference_sidebyside(args: DictConfig) -> None:
 
 @hydra.main(config_name="tcfm", config_path="./config", version_base="1.3")
 def hydra_wrapper(args: DictConfig) -> None:
-    plot_inference_sidebyside(args)
+    plot_density_traj_sidebyside(args)
 
 
 if __name__ == "__main__":
