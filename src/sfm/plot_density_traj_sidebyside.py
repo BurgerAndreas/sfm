@@ -12,7 +12,7 @@ import ot as pot
 import torch
 from torch import Tensor
 import torchdyn
-from torchdyn.core import DEFunc, NeuralODE
+import torchdyn.core as tdyn
 from torchdyn.nn import Augmenter
 from omegaconf import DictConfig
 from tqdm import tqdm
@@ -26,6 +26,9 @@ from sfm.networks import get_model
 from sfm.tcfmhelpers import CNF
 from sfm.plotstyle import _cscheme, set_seaborn_style
 
+from torchvision.utils import make_grid
+from torchvision.transforms import ToPILImage
+
 PLOT_DIR_SOURCE = "plots/sources"
 
 # def set_seaborn_style(*args, **kwargs):
@@ -37,7 +40,7 @@ def plot_samples(args: DictConfig, sample: Tensor) -> None:
     plt.scatter(sample[:, 0], sample[:, 1], s=1, alpha=0.5)
     plt.tight_layout(pad=0.0)
     fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_scatter.png"
-    plt.savefig(fname, dpi=40)
+    plt.savefig(fname, dpi=args.dpi)
     print(f"Saved sample to\n {fname}")
     plt.close()
     
@@ -54,7 +57,7 @@ def plot_samples(args: DictConfig, sample: Tensor) -> None:
     )
     plt.tight_layout(pad=0.0)
     fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_hist2d.png"
-    plt.savefig(fname, dpi=40)
+    plt.savefig(fname, dpi=args.dpi)
     print(f"Saved hist2d to\n {fname}")
     plt.close()
     
@@ -64,7 +67,7 @@ def plot_samples(args: DictConfig, sample: Tensor) -> None:
     )
     plt.tight_layout(pad=0.0)
     fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_kde.png"
-    plt.savefig(fname, dpi=40)
+    plt.savefig(fname, dpi=args.dpi)
     print(f"Saved kde to\n {fname}")
     plt.close()
 
@@ -78,10 +81,6 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
     if args.force_cpu:
         device = "cpu"
     
-    if args.classcond:
-        print(" -- Stopping sidebyside because class conditional with log-prob is not implemented yet")
-        return
-    
     # folder with temporary trajectory plots
     tempdir = f"{args.savedir}/sidebyside"
     os.makedirs(tempdir, exist_ok=True)
@@ -91,10 +90,10 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
     combinedplotname = f"{tplotname}_{args['source']['trgt']}-to-{args.data['trgt']}"
     combinedplotname += f"-ot" if args.use_ot else ""
     
-    n_models = 1
     n_samples = args.plot_batch_size
     n_t_span = args.plot_integration_steps
     n_img = 5 # number of images of the inference trajectory
+    d_img = [1, 28, 28]
     
     
     model = get_model(**args.model).to(device)
@@ -125,61 +124,69 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
     # integration times
     ts = torch.linspace(0, 1, n_img, device=device) # [n_img]
     
-    # # compute trajectory once, later pick time slices for gif
-    # nde = NeuralODE(DEFunc(torch_wrapper(model)), solver="euler").to(device)
-    # # with torch.no_grad():
-    # # [n_img, n_samples, 2]
-    # traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
+    if args.classcond:
+        # print(" -- Stopping sidebyside because class conditional with log-prob is not implemented yet")
+        # return
+        # compute trajectory once, later pick time slices for gif
+        nde = tdyn.NeuralODE(tdyn.DEFunc(torch_wrapper(model)), solver="dopri5").to(device)
+        # with torch.no_grad():
+        # [n_img, n_samples, 2]
+        traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
     
     set_seaborn_style()
-    n_plots = 1
     # integrate up to t / starting form t using n_t_span steps
     for i, t in tqdm(enumerate(ts)):
-        fig, axes = plt.subplots(n_plots, n_models, figsize=(6 * n_models, 6 * n_plots))
-        axis = axes if n_models == 1 else axes[:, 0]
+        fig, ax = plt.subplots(1, 1, figsize=(6, 6))
         
-        ### log-probability / density plot
-        cnf = DEFunc(CNF(model))
-        nde = NeuralODE(cnf, solver="euler", sensitivity="adjoint")
-        cnf_model = torch.nn.Sequential(Augmenter(augment_idx=1, augment_dims=1), nde)
-        with torch.no_grad():
-            if t > 0:
-                # integrate backwards from t to 0
-                aug_traj = (
-                    cnf_model[1]
-                    .to(device)
-                    .trajectory(
-                        Augmenter(1, 1)(gridpoints).to(device),
-                        t_span=torch.linspace(start=t, end=0, steps=n_t_span, device=device),
-                    )
-                )[-1].cpu()
-                # log_probs = log_8gaussian_density(aug_traj[:, 1:]) - aug_traj[:, 0]
-                log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
-            else:
-                # no integration, just evaluate at t=0
-                # log_probs = log_8gaussian_density(gridpoints)
-                log_probs = sourcedist.log_prob(gridpoints)
-        assert log_probs.shape == (points_real**2,), f"log_probs.shape: {log_probs.shape}"
-        # print(f"Log-prob of sample: {sourcedist.log_prob(sample).nanmean().item()}")
-        # tqdm.write(f"Log-prob of sample under model: {log_probs.nanmean().item():0.2f}")
-        log_probs = log_probs.reshape(Y.shape)
-        
-        # # Convert log probabilities to probabilities and normalize
-        # probs = torch.exp(log_probs)
-        # # Normalize to [0,1] for better visibility
-        # probs = (probs - probs.min()) / (probs.max() - probs.min())
-        
-        ax = axis
-        # viridis coolwarm BuPu PuRd magma inferno cividis prism ocean
-        cmap = "viridis" 
-        # cmap = sns.color_palette("Spectral", as_cmap=True)
-        ax.pcolormesh(
-            X, Y, torch.exp(log_probs), 
-            # vmax=1, 
-            cmap=cmap,
-            # shading{'flat', 'nearest', 'gouraud', 'auto'}
-            shading='gouraud', norm='linear'
-        )
+        if args.classcond:
+            grid = make_grid(
+                traj[i, :100].view([-1, *d_img]).clip(-1, 1), 
+                value_range=(-1, 1), padding=0, nrow=10
+            )
+            img = ToPILImage()(grid)
+            ax.imshow(img)
+        else:
+            ### log-probability / density plot
+            nde = tdyn.NeuralODE(tdyn.DEFunc(CNF(model)), solver="euler", sensitivity="adjoint")
+            cnf_model = torch.nn.Sequential(Augmenter(augment_idx=1, augment_dims=1), nde)
+            with torch.no_grad():
+                if t > 0:
+                    # integrate backwards from t to 0
+                    aug_traj = (
+                        cnf_model[1]
+                        .to(device)
+                        .trajectory(
+                            Augmenter(1, 1)(gridpoints).to(device),
+                            t_span=torch.linspace(start=t, end=0, steps=n_t_span, device=device),
+                        )
+                    )[-1].cpu()
+                    # log_probs = log_8gaussian_density(aug_traj[:, 1:]) - aug_traj[:, 0]
+                    log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
+                else:
+                    # no integration, just evaluate at t=0
+                    # log_probs = log_8gaussian_density(gridpoints)
+                    log_probs = sourcedist.log_prob(gridpoints)
+            assert log_probs.shape == (points_real**2,), f"log_probs.shape: {log_probs.shape}"
+            # print(f"Log-prob of sample: {sourcedist.log_prob(sample).nanmean().item()}")
+            # tqdm.write(f"Log-prob of sample under model: {log_probs.nanmean().item():0.2f}")
+            log_probs = log_probs.reshape(Y.shape)
+            
+            # # Convert log probabilities to probabilities and normalize
+            # probs = torch.exp(log_probs)
+            # # Normalize to [0,1] for better visibility
+            # probs = (probs - probs.min()) / (probs.max() - probs.min())
+            
+            # viridis coolwarm BuPu PuRd magma inferno cividis prism ocean
+            cmap = "viridis" 
+            # cmap = sns.color_palette("Spectral", as_cmap=True)
+            ax.pcolormesh(
+                X, Y, torch.exp(log_probs).cpu().numpy(), 
+                # vmax=1, 
+                cmap=cmap,
+                # shading{'flat', 'nearest', 'gouraud', 'auto'}
+                shading='gouraud', norm='linear'
+            )
+        ax.axis("off")
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_xlim(limmin, limmax)
@@ -187,7 +194,7 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
         # ax.set_title(f"{args.runname}", fontsize=30)
         # can't get rid of white border, so pad a bit to make it look cleaner
         plt.tight_layout(pad=0.1) 
-        plt.savefig(f"{tempdir}/{tplotname}_{t:0.2f}.png", dpi=40)
+        plt.savefig(f"{tempdir}/{tplotname}_{t:0.2f}.png", dpi=args.dpi)
         plt.close()
 
     # load all density plots and put side by side into one figure
@@ -201,7 +208,7 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
     for i, (ax, img) in enumerate(zip(axes, images)):
         ax.imshow(img)
         # remove border between plots
-        # ax.axis("off")
+        ax.axis("off")
         ax.set_xticks([])
         ax.set_yticks([]) 
         # torn off minor ticks
@@ -210,7 +217,7 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
     
     plt.tight_layout(pad=0.0)
     fname = f"{args.savedir}/{combinedplotname}_sidebyside.png"
-    plt.savefig(fname, dpi=40)
+    plt.savefig(fname, dpi=args.dpi)
     plt.close()
     print(f"Saved sidebyside to\n {fname}")
 

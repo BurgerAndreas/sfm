@@ -10,6 +10,8 @@ from tqdm import tqdm
 from typing import *
 from zuko.utils import odeint
 
+from sfm.gmm import GaussianMixture
+
 # To change the source distribution, change
 # 1. the sampling during training and testing
 # 2. the log-probability density function
@@ -33,7 +35,7 @@ class SourceDistribution:
         Returns:
             torch.Tensor: Log probabilities of the input samples.
         """
-        return self.dist.log_prob(x).sum(dim=-1)
+        return self.dist.log_prob(x.to(self.device)).sum(dim=-1)
 
     def sample(self, nsamples: int | tuple) -> Tensor:
         return self._sample2d(nsamples)
@@ -57,7 +59,7 @@ class CoupledSourceDistribution(SourceDistribution):
     """
 
     def log_prob(self, x: Tensor) -> Tensor:
-        return self.dist.log_prob(x)
+        return self.dist.log_prob(x.to(self.device))
 
     def sample(self, nsamples: int | tuple) -> Tensor:
         if self.data_dim == 2:
@@ -78,14 +80,20 @@ class CoupledSourceDistribution(SourceDistribution):
 class UniformSource(SourceDistribution):
     def __init__(self, low: float = -1.0, high: float = 1.0, data_dim: int = 2, **kwargs):
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Uniform(low, high)
+        self.dist = torch.distributions.Uniform(
+            torch.as_tensor(low).to(self.device), 
+            torch.as_tensor(high).to(self.device)
+        )
 
 
 class StandardNormalSource(SourceDistribution):
     def __init__(self, data_dim: int = 2, mean: float = 0.5, std: float = 0.01, **kwargs):
         """Mean=0, std=1"""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Normal(mean, std)
+        self.dist = torch.distributions.Normal(
+            torch.as_tensor(mean).to(self.device), 
+            torch.as_tensor(std).to(self.device)
+        )
 
     # def log_prob(self, x: Tensor) -> Tensor:
     #     return self.dist.log_prob(x).sum(dim=-1)
@@ -101,10 +109,10 @@ class IsotropicGaussianSource(CoupledSourceDistribution):
         Isotropic means that the covariance matrix is a multiple of the identity matrix.
         """
         super().__init__(data_dim, **kwargs)
-        self.mu = torch.as_tensor(mu)
+        self.mu = torch.as_tensor(mu).to(self.device)
         self.sigma = sigma
         self.dist = torch.distributions.MultivariateNormal(
-            loc=self.mu, covariance_matrix=torch.diag(torch.tensor([sigma] * data_dim))
+            loc=self.mu, covariance_matrix=torch.diag(torch.tensor([sigma] * data_dim)).to(self.device)
         )
 
 
@@ -118,9 +126,11 @@ class DiagonalGaussianSource(CoupledSourceDistribution):
         sigma: Tensor of shape (d,) representing the standard deviation for each dimension
         """
         super().__init__(data_dim, **kwargs)
-        self.mu = torch.as_tensor(mu)
-        self.sigma = torch.as_tensor(sigma)
-        self.dist = torch.distributions.MultivariateNormal(loc=self.mu, covariance_matrix=torch.diag(self.sigma))
+        self.mu = torch.as_tensor(mu).to(self.device)
+        self.sigma = torch.as_tensor(sigma).to(self.device)
+        self.dist = torch.distributions.MultivariateNormal(
+            loc=self.mu, covariance_matrix=torch.diag(self.sigma).to(self.device)
+        )
 
 
 class GaussianSource(CoupledSourceDistribution):
@@ -131,8 +141,8 @@ class GaussianSource(CoupledSourceDistribution):
         Sigma: Tensor of shape (d, d), the covariance matrix.
         """
         super().__init__(data_dim, **kwargs)
-        mu = torch.as_tensor(mu)
-        Sigma = torch.as_tensor(Sigma)
+        mu = torch.as_tensor(mu).to(self.device)
+        Sigma = torch.as_tensor(Sigma).to(self.device)
         # assert Sigma.shape == (data_dim, data_dim), f"Sigma has wrong shape {Sigma.shape}"
         self.dist = torch.distributions.MultivariateNormal(mu, Sigma)
 
@@ -148,16 +158,16 @@ class MixtureOfGaussians(CoupledSourceDistribution):
     def __init__(self, mus: Tensor, sigmas: Tensor, pis: Tensor, data_dim: int = 2, dtype: torch.dtype = torch.float32, **kwargs):
         # means (components x dimensions)
         super().__init__(data_dim, dtype=dtype, **kwargs)
-        mus = torch.as_tensor(mus, dtype=dtype)
+        mus = torch.as_tensor(mus, dtype=dtype).to(self.device)
         # std deviations (components x dimensions)
-        sigmas = torch.as_tensor(sigmas, dtype=dtype)
+        sigmas = torch.as_tensor(sigmas, dtype=dtype).to(self.device)
         # mixture weights (components)
-        pis = torch.as_tensor(pis, dtype=dtype)
+        pis = torch.as_tensor(pis, dtype=dtype).to(self.device)
         mix = torch.distributions.Categorical(pis)
         self.K = len(mus)  # Number of components
-        assert mus.shape == (self.K, data_dim), f"mus has wrong shape {mus.shape}"
-        assert sigmas.shape == (self.K, data_dim), f"sigmas has wrong shape {sigmas.shape}"
-        assert pis.shape == (self.K,), f"pis has wrong shape {pis.shape}"
+        # assert mus.shape == (self.K, data_dim), f"mus has wrong shape {mus.shape}"
+        # assert sigmas.shape == (self.K, data_dim), f"sigmas has wrong shape {sigmas.shape}"
+        # assert pis.shape == (self.K,), f"pis has wrong shape {pis.shape}"
         assert all(0 <= pi <= 1 for pi in pis), "all pis must be between 0 and 1"
         assert sum(pis) == 1, "pis must sum to 1"
         comp = torch.distributions.Independent(
@@ -175,7 +185,8 @@ class BetaSource(SourceDistribution):
         self.beta = beta
         super().__init__(data_dim, **kwargs)
         self.dist = torch.distributions.Beta(
-            torch.as_tensor(alpha).to(self.device), torch.as_tensor(beta).to(self.device)
+            torch.as_tensor(alpha).to(self.device), 
+            torch.as_tensor(beta).to(self.device)
         )
 
     def to(self, device):
@@ -187,7 +198,10 @@ class CauchySource(SourceDistribution):
     def __init__(self, loc: float, scale: float, data_dim: int = 2, **kwargs):
         """Symmetric, bell-shaped like the Gaussian distribution, but with heavier tails."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Cauchy(loc, scale)
+        self.dist = torch.distributions.Cauchy(
+            torch.as_tensor(loc).to(self.device), 
+            torch.as_tensor(scale).to(self.device)
+        )
 
 
 class Chi2Source(SourceDistribution):
@@ -196,7 +210,9 @@ class Chi2Source(SourceDistribution):
         For low k values, the distribution is right-skewed, while for high k values, it approaches a normal distribution.
         """
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Chi2(df)
+        self.dist = torch.distributions.Chi2(
+            torch.as_tensor(df).to(self.device)
+        )
 
 
 class DirichletSource(CoupledSourceDistribution):
@@ -205,15 +221,17 @@ class DirichletSource(CoupledSourceDistribution):
         Meaning the dimensions are correlated.
         """
         super().__init__(data_dim, **kwargs)
-        concentration = torch.as_tensor(concentration)
-        assert concentration.shape == (data_dim,), f"Concentration has wrong shape {concentration.shape}"
+        concentration = torch.as_tensor(concentration).to(self.device)
+        # assert concentration.shape == (data_dim,), f"Concentration has wrong shape {concentration.shape}"
         self.dist = torch.distributions.Dirichlet(concentration)
 
 
 class ExponentialSource(SourceDistribution):
     def __init__(self, rate: float, data_dim: int = 2, **kwargs):
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Exponential(rate)
+        self.dist = torch.distributions.Exponential(
+            torch.as_tensor(rate).to(self.device)
+        )
 
 
 class FisherSnedecorSource(SourceDistribution):
@@ -223,13 +241,19 @@ class FisherSnedecorSource(SourceDistribution):
         right-skewed and approaches symmetry as the degrees of freedom increase.
         """
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.FisherSnedecor(df1, df2)
+        self.dist = torch.distributions.FisherSnedecor(
+            torch.as_tensor(df1).to(self.device), 
+            torch.as_tensor(df2).to(self.device)
+        )
 
 
 class GammaSource(SourceDistribution):
     def __init__(self, concentration: float, rate: float, data_dim: int = 2, **kwargs):
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Gamma(concentration, rate)
+        self.dist = torch.distributions.Gamma(
+            torch.as_tensor(concentration).to(self.device), 
+            torch.as_tensor(rate).to(self.device)
+        )
 
 
 class GumbelSource(SourceDistribution):
@@ -239,20 +263,27 @@ class GumbelSource(SourceDistribution):
         of a number of samples from the same distribution,
         such as the highest temperature in a year or the largest flood in a century."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Gumbel(loc, scale)
+        self.dist = torch.distributions.Gumbel(
+            torch.as_tensor(loc).to(self.device), 
+            torch.as_tensor(scale).to(self.device)
+        )
 
 
 class HalfCauchySource(SourceDistribution):
     def __init__(self, scale: float, data_dim: int = 2, **kwargs):
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.HalfCauchy(scale)
+        self.dist = torch.distributions.HalfCauchy(
+            torch.as_tensor(scale).to(self.device)
+        )
 
 
 class HalfNormalSource(SourceDistribution):
     def __init__(self, scale: float, data_dim: int = 2, **kwargs):
         """HalfNormal distribution is a distribution of the absolute value of a random variable."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.HalfNormal(scale)
+        self.dist = torch.distributions.HalfNormal(
+            torch.as_tensor(scale).to(self.device)
+        )
 
 
 class InverseGammaSource(SourceDistribution):
@@ -261,7 +292,10 @@ class InverseGammaSource(SourceDistribution):
         Used in Bayesian statistics, where the distribution arises as the marginal posterior distribution for the unknown variance of a normal distribution, if an uninformative prior is used.
         Domain is x > 0."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.InverseGamma(concentration, rate)
+        self.dist = torch.distributions.InverseGamma(
+            torch.as_tensor(concentration).to(self.device), 
+            torch.as_tensor(rate).to(self.device)
+        )
 
 
 class KumaraswamySource(SourceDistribution):
@@ -271,7 +305,10 @@ class KumaraswamySource(SourceDistribution):
         probability density function, cumulative distribution function and quantile functions can be expressed in closed form.
         """
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Kumaraswamy(a, b)
+        self.dist = torch.distributions.Kumaraswamy(
+            torch.as_tensor(a).to(self.device), 
+            torch.as_tensor(b).to(self.device)
+        )
 
 
 class LaplaceSource(SourceDistribution):
@@ -280,7 +317,10 @@ class LaplaceSource(SourceDistribution):
         For example, in the context of neural networks, the distribution of the difference between two weights.
         """
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Laplace(loc, scale)
+        self.dist = torch.distributions.Laplace(
+            torch.as_tensor(loc).to(self.device), 
+            torch.as_tensor(scale).to(self.device)
+        )
 
 
 class LogNormalSource(SourceDistribution):
@@ -288,7 +328,10 @@ class LogNormalSource(SourceDistribution):
         """Describes the distribution of the logarithm of a random variable.
         Useful for modeling quantities that are strictly positive."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.LogNormal(loc, scale)
+        self.dist = torch.distributions.LogNormal(
+            torch.as_tensor(loc).to(self.device), 
+            torch.as_tensor(scale).to(self.device)
+        )
 
 
 class LowRankMultivariateNormalSource(CoupledSourceDistribution):
@@ -297,9 +340,9 @@ class LowRankMultivariateNormalSource(CoupledSourceDistribution):
         For example, in the context of neural networks, the distribution of the weights.
         Low-rank covariance matrix is a sum of a rank-r matrix and a diagonal matrix."""
         super().__init__(data_dim, **kwargs)
-        self.loc = torch.as_tensor(loc)
-        self.cov_factor = torch.as_tensor(cov_factor)
-        self.cov_diag = torch.as_tensor(cov_diag)
+        self.loc = torch.as_tensor(loc).to(self.device)
+        self.cov_factor = torch.as_tensor(cov_factor).to(self.device)
+        self.cov_diag = torch.as_tensor(cov_diag).to(self.device)
         self.dist = torch.distributions.LowRankMultivariateNormal(self.loc, self.cov_factor, self.cov_diag)
 
 
@@ -309,12 +352,12 @@ class MultivariateNormalSource(CoupledSourceDistribution):
         Covariance matrix describes the relationship between the dimensions.
         """
         super().__init__(data_dim, **kwargs)
-        self.loc = torch.as_tensor(loc)
-        covariance_matrix = torch.as_tensor(covariance_matrix)
-        assert covariance_matrix.shape == (
-            data_dim,
-            data_dim,
-        ), f"Covariance matrix has wrong shape {covariance_matrix.shape}"
+        self.loc = torch.as_tensor(loc).to(self.device)
+        covariance_matrix = torch.as_tensor(covariance_matrix).to(self.device)
+        # assert covariance_matrix.shape == (
+        #     data_dim,
+        #     data_dim,
+        # ), f"Covariance matrix has wrong shape {covariance_matrix.shape}"
         self.dist = torch.distributions.MultivariateNormal(self.loc, covariance_matrix)
 
 
@@ -323,14 +366,20 @@ class NormalSource(SourceDistribution):
         """Describes Gaussian distribution with mean=loc and std=scale,
         where all dimensions are uncorrelated and have the same mean and variance."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Normal(loc, scale)
+        self.dist = torch.distributions.Normal(
+            torch.as_tensor(loc).to(self.device), 
+            torch.as_tensor(scale).to(self.device)
+        )
 
 
 class ParetoSource(SourceDistribution):
     def __init__(self, scale: float, alpha: float, data_dim: int = 2, **kwargs):
         """Pareto distribution is a heavy tail characterized by the Pareto principle, also known as the 80/20 rule."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Pareto(scale, alpha)
+        self.dist = torch.distributions.Pareto(
+            torch.as_tensor(scale).to(self.device), 
+            torch.as_tensor(alpha).to(self.device)
+        )
 
 
 class RelaxedBernoulliSource(SourceDistribution):
@@ -339,9 +388,9 @@ class RelaxedBernoulliSource(SourceDistribution):
         relaxing the discrete Bernoulli distribution to a continuous distribution.
         Temperature controls the degree of relaxation."""
         super().__init__(data_dim, **kwargs)
-        self.logits = torch.as_tensor(logits)
-        self.temperature = torch.as_tensor(temperature)
-        assert self.logits.shape == (data_dim,), f"Logits have wrong shape {self.logits.shape}"
+        self.logits = torch.as_tensor(logits).to(self.device)
+        self.temperature = torch.as_tensor(temperature).to(self.device)
+        # assert self.logits.shape == (data_dim,), f"Logits have wrong shape {self.logits.shape}"
         # assert self.temperature.shape == (data_dim,), f"Temperature has wrong shape {self.temperature.shape}"
         self.dist = torch.distributions.RelaxedBernoulli(temperature=self.temperature, logits=self.logits)
 
@@ -353,21 +402,31 @@ class StudentTSource(SourceDistribution):
     def __init__(self, df: float, loc: float = 0.0, scale: float = 1.0, data_dim: int = 2, **kwargs):
         """Describes the distribution of the difference between two independent Gaussian random variables."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.StudentT(df, loc, scale)
+        self.dist = torch.distributions.StudentT(
+            torch.as_tensor(df).to(self.device), 
+            torch.as_tensor(loc).to(self.device), 
+            torch.as_tensor(scale).to(self.device)
+        )
 
 
 class VonMisesSource(SourceDistribution):
     def __init__(self, loc: float, concentration: float, data_dim: int = 2, **kwargs):
         """Describes the distribution of angles on the unit circle."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.VonMises(loc, concentration)
+        self.dist = torch.distributions.VonMises(
+            torch.as_tensor(loc).to(self.device), 
+            torch.as_tensor(concentration).to(self.device)
+        )
 
 
 class WeibullSource(SourceDistribution):
     def __init__(self, scale: float, concentration: float, data_dim: int = 2, **kwargs):
         """Weibull distribution describes the distribution of the minimum of a set of random variables."""
         super().__init__(data_dim, **kwargs)
-        self.dist = torch.distributions.Weibull(scale, concentration)
+        self.dist = torch.distributions.Weibull(
+            torch.as_tensor(scale).to(self.device), 
+            torch.as_tensor(concentration).to(self.device)
+        )
 
 
 ##############################################################################
@@ -476,6 +535,7 @@ _distributions = {
     "8gaussians": EightGaussiansDistribution,
     # Data fitted distributions
     "datafittednormal": DataFittedNormal,
+    "gmm": GaussianMixture,
 }
 
 def get_source_distribution(trgt: str = "gaussian", **kwargs):

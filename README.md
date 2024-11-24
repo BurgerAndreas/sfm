@@ -9,22 +9,30 @@ and [Alexander Tong and Kilian Fatras's TorchCFM](https://github.com/atong01/con
 ```bash
 mamba activate sfm
 
-sources=("8gaussians" "gamma" "beta" "diagonal" "laplace" "gaussian" "normal" "uniform" "mog" "multivariate")
+# Make moons
+sources=("8gaussians" "gamma" "beta" "cauchy" "diagonal" "laplace" "gaussian" "normal" "uniform" "mog" "multivariate")
 ots=(True False)
 
 for use_ot in "${ots[@]}"; do
     for source in "${sources[@]}"; do
-        # python scripts/tcfm.py source=${source} task=all use_ot=${use_ot}
+        python scripts/tcfm.py source=${source} task=all use_ot=${use_ot} 
     done
 done
 
+# MNIST
 sources=("gamma" "beta" "diagonal" "laplace" "normal" "uniform" "mog" "multivariate" "datafittednormal" "8gaussians" "gaussian")
 ots=(True False)
 for use_ot in "${ots[@]}"; do
     for source in "${sources[@]}"; do
-        python scripts/tcfm.py source=${source} task=train use_ot=${use_ot} data=mnist
+        python scripts/tcfm.py source=${source} use_ot=${use_ot} data=mnist
     done
 done
+
+# fit a GMM and use it as source distribution
+python scripts/tcfm.py source=gmm data=mnist
+
+# use Lipman flow matching (only for normal source)
+python scripts/tcfm.py source=normal fmloss=lipman
 ```
 
 ## Installation
@@ -76,14 +84,11 @@ done
 
 ## TODO
 
-- [] gif naming based on integration steps
-- [] name gifs based on ot
+- [] MNIST integrator logprob
+
 - [] sweep training with different inference steps
 - [] plot different inference steps sidebyside
-- [] MNIST
-    - [] MNIST as target / data
-    - [] UNET as model
-    - [] ensure shapes and bounds
-- [] Measure Wasserstein distance between source and target
+
+- [] Measure (Wasserstein) distance between source and target
 
 

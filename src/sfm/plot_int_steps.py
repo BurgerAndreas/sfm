@@ -163,7 +163,7 @@ def plot_integration_steps(args: DictConfig) -> None:
                     x=Augmenter(1, 1)(x1).to(device),
                     t_span=torch.linspace(start=tdata, end=tnoise, steps=nsteps, device=device),
                     )
-                )[-1].cpu()
+                )[-1]
                 # Compute log probabilities
                 # We can load the log probs later to plot the training progress
                 log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
@@ -183,6 +183,7 @@ def plot_integration_steps(args: DictConfig) -> None:
                 y0 = sourcedist.sample(nsamples).to(device)
                 # reshape to [nsamples, *d_img]
                 y0 = y0.view([nsamples, *d_img])
+                model.nfe = 0
                 with torch.no_grad():
                     # [nsteps, nsamples, *d_img]
                     traj = torchdiffeq.odeint(
@@ -200,6 +201,7 @@ def plot_integration_steps(args: DictConfig) -> None:
                     )[-1]
                     # reshape to [nsamples, h*w]
                     traj = traj.view(nsamples, -1)
+                print(f"Euler integration: nsteps={nsteps} NFE={model.nfe}")
             else:
                 # no integration, just evaluate at t=0
                 # [nsamples, h*w]
@@ -215,9 +217,11 @@ def plot_integration_steps(args: DictConfig) -> None:
             plt.tight_layout(pad=0.0)
         else:
             if nsteps > 0:
+                model.nfe = 0
                 nde = tdyn.NeuralODE(tdyn.DEFunc(torch_wrapper(model)), solver="euler").to(device)
                 # [intsteps, nsamples, D]
                 traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
+                print(f"Euler integration: nsteps={nsteps} NFE={model.nfe}")
             else:
                 traj = sourcedist.sample(nsamples)
             fig = plot_trajectories(traj)
@@ -253,8 +257,7 @@ def plot_integration_steps(args: DictConfig) -> None:
                             Augmenter(1, 1)(gridpoints).to(device),
                             t_span=torch.linspace(start=1, end=0, steps=nsteps, device=device),
                         )
-                    )[-1].cpu()
-                    # log_probs = log_8gaussian_density(aug_traj[:, 1:]) - aug_traj[:, 0]
+                    )[-1]
                     log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
                 else:
                     # no integration, just evaluate at t=0
@@ -275,7 +278,7 @@ def plot_integration_steps(args: DictConfig) -> None:
             cmap = "viridis" 
             # cmap = sns.color_palette("Spectral", as_cmap=True)
             ax.pcolormesh(
-                X, Y, torch.exp(log_probs), 
+                X, Y, torch.exp(log_probs).cpu().numpy(), 
                 # vmax=1, 
                 cmap=cmap,
                 # shading{'flat', 'nearest', 'gouraud', 'auto'}
@@ -288,7 +291,7 @@ def plot_integration_steps(args: DictConfig) -> None:
             # ax.set_title(f"{args.runname}", fontsize=30)
             # can't get rid of white border, so pad a bit to make it look cleaner
             plt.tight_layout(pad=0.1) 
-            plt.savefig(f"{tempdir}/{tplotname}_{nsteps}.png", dpi=40)
+            plt.savefig(f"{tempdir}/{tplotname}_{nsteps}.png", dpi=args.dpi)
             plt.close()
     
     ### log-probability / density plot side by side
@@ -313,7 +316,7 @@ def plot_integration_steps(args: DictConfig) -> None:
         
         plt.tight_layout(pad=0.0)
         fname = f"{args.savedir}/intsteps_density.png"
-        plt.savefig(fname, dpi=40)
+        plt.savefig(fname, dpi=args.dpi)
         plt.close()
         print(f"Saved integration steps to\n {fname}")
     
@@ -336,7 +339,7 @@ def plot_integration_steps(args: DictConfig) -> None:
         # ax.set_title(f"T={ts[i]:0.2f}")
     plt.tight_layout(pad=0.0)
     fname = f"{args.savedir}/intsteps_gen.png"
-    plt.savefig(fname, dpi=40)
+    plt.savefig(fname, dpi=args.dpi)
     plt.close()
     print(f"Saved generation to\n {fname}")
     

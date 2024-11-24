@@ -100,7 +100,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
         plt.scatter(sample[:, 0], sample[:, 1], s=1, alpha=0.5)
         plt.tight_layout(pad=0.0)
         fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_scatter.png"
-        plt.savefig(fname, dpi=40)
+        plt.savefig(fname, dpi=args.dpi)
         print(f"Saved sample to\n {fname}")
         plt.close()
         
@@ -108,7 +108,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
         plt.hist2d(sample[:, 0].numpy(), sample[:, 1].numpy(), bins=100, cmap="coolwarm")
         plt.tight_layout(pad=0.0)
         fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_hist2d.png"
-        plt.savefig(fname, dpi=40)
+        plt.savefig(fname, dpi=args.dpi)
         print(f"Saved hist2d to\n {fname}")
         plt.close()
     else:
@@ -125,7 +125,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
         plt.yticks([])
         plt.tight_layout(pad=0.0)
         fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_img.png"
-        plt.savefig(fname, dpi=40)
+        plt.savefig(fname, dpi=args.dpi)
         print(f"Saved sample to\n {fname}")
         plt.close()
     
@@ -163,7 +163,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
         plt.yticks([])
         plt.tight_layout(pad=0.0)
         plt.imshow(img)
-        plt.savefig(f"{args.savedir}/gif/gentrajfinal.png", dpi=400)
+        plt.savefig(f"{args.savedir}/gif/gentrajfinal.png", dpi=args.dpi)
         plt.close()
     else:
         nde = tdyn.NeuralODE(tdyn.DEFunc(torch_wrapper(model)), solver="euler").to(device)
@@ -205,7 +205,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
                 assert log_probs.shape == (points_real**2,), f"log_probs.shape: {log_probs.shape}"
                 log_probs = log_probs.reshape(Y.shape)
                 ax = axis[iplot] if n_plots > 1 else axis
-                ax.pcolormesh(X, Y, torch.exp(log_probs), vmax=1)
+                ax.pcolormesh(X, Y, torch.exp(log_probs).cpu().numpy(), vmax=1)
                 ax.set_xticks([])
                 ax.set_yticks([])
                 ax.set_xlim(limmin, limmax)
@@ -265,7 +265,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
         
         plt.tight_layout(pad=0.0)
         # plt.suptitle(f"{args['source']['trgt']} to Moons T={t:0.2f}", fontsize=20)
-        plt.savefig(get_frame_name(args, t), dpi=40)
+        plt.savefig(get_frame_name(args, t), dpi=args.dpi)
         plt.close()
         # print(f"Saved figure to\n {args.savedir}/gif/{t:0.2f}.png")
     

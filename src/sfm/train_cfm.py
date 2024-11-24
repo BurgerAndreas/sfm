@@ -18,7 +18,7 @@ from torchvision.transforms import ToPILImage
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
-from torchdyn.core import DEFunc, NeuralODE
+import torchdyn.core as tdyn
 from torchdyn.nn import Augmenter
 
 from torchcfm.utils import torch_wrapper
@@ -26,12 +26,7 @@ from torchcfm.utils import torch_wrapper
 import hydra
 from omegaconf import DictConfig
 
-from torchcfm.conditional_flow_matching import ConditionalFlowMatcher, ExactOptimalTransportConditionalFlowMatcher
-
-import torchcfm.models.models as tcfm_models
 from torchcfm.utils import torch_wrapper
-
-from torchcfm.optimal_transport import OTPlanSampler
 
 from sfm.networks import get_model
 from sfm.flowmodel import ContNormFlow
@@ -40,6 +35,7 @@ from sfm.datasets import sample_dataset, get_dataset
 from sfm.tcfmhelpers import sample_conditional_pt, compute_conditional_vector_field
 from sfm.tcfmhelpers import CNF, plot_trajectories
 from sfm.plotstyle import set_seaborn_style, set_style_after
+from sfm.flowmatching import get_flowmatching
 
 def get_trajplot_name(args: DictConfig, k: int):
     # traj_{k}_steps{nsteps}.png
@@ -74,7 +70,7 @@ def eval_traj(args: DictConfig, model, node, device, sourcedist, tnoise, tdata, 
             # MNIST: (2, B, 1, 28, 28) 
             # only plot the last time step
             nrows = 3
-            _gen = traj[-1].cpu().numpy()[:nrows**2]
+            _gen = traj[-1][:nrows**2]
             # choose first 9 samples, and plot them in a 3x3 grid
             grid = make_grid(
                 _gen.view([-1, *(1, 28, 28)]).clip(-1, 1), 
@@ -82,6 +78,8 @@ def eval_traj(args: DictConfig, model, node, device, sourcedist, tnoise, tdata, 
             )
             img = ToPILImage()(grid)
             plt.imshow(img)
+            plt.axis("off")
+            plt.tight_layout(pad=0.0)
             plt.savefig(get_trajplot_name(args, k))
             plt.close()
             print(f"Saved trajectory to {get_trajplot_name(args, k)}")
@@ -105,8 +103,7 @@ def eval_logprob(args: DictConfig, model, device, sourcedist, trgtdist, tnoise, 
     if args.classcond:
         logprobs_train = None # TODO: implement
     else:
-        cnf = DEFunc(CNF(model))
-        nde = NeuralODE(cnf, solver="euler", sensitivity="adjoint")
+        nde = tdyn.NeuralODE(tdyn.DEFunc(CNF(model)), solver="euler", sensitivity="adjoint")
         cnf_model = torch.nn.Sequential(Augmenter(augment_idx=1, augment_dims=1), nde)
         # with torch.no_grad():
         # x1 = sample_moons(args.eval_batch_size).to(device).requires_grad_()
@@ -128,7 +125,7 @@ def eval_logprob(args: DictConfig, model, device, sourcedist, trgtdist, tnoise, 
     return logprobs_train
 
 def train_cfm(args: DictConfig):
-    print(f"Training CFM for {args.runname}\n")
+    print("\n" + "-"*80 + f"\nTraining CFM for {args.runname}\n")
     
     assert args.savedir not in ["", None, "None"], "savedir is required"
     os.makedirs(f"{args.savedir}/train", exist_ok=True)
@@ -146,9 +143,7 @@ def train_cfm(args: DictConfig):
             print(f"Model already exists: {get_model_name(args)}")
             return
 
-    ot_sampler = OTPlanSampler(method="exact")
-    sigma = 0.1 # for flow matching
-    dim = 2 # dimension of the data
+    # ot_sampler = OTPlanSampler(method="exact")
     nintsteps = args.eval_integration_steps 
     tnoise = 0 # noise time
     tdata = 1 # data time
@@ -175,17 +170,9 @@ def train_cfm(args: DictConfig):
     model = get_model(**args.model).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    if args.classcond and args.use_ot:
-        flowmatching = ExactOptimalTransportConditionalFlowMatcher(sigma=sigma)
-    else:
-        flowmatching = ConditionalFlowMatcher(sigma=sigma)
-        
-    # Target FM (Lipman et al. 2023), only works with Gaussian source
-    # FM = TargetConditionalFlowMatcher(sigma=sigma)
-    # Exact OT CFM
-    # FM = ExactOptimalTransportConditionalFlowMatcher(sigma=sigma)
+    flowmatching = get_flowmatching(args)
 
-    node = NeuralODE(
+    node = tdyn.NeuralODE(
         torch_wrapper(model), solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
     ).to(device)
 
@@ -236,8 +223,8 @@ def train_cfm(args: DictConfig):
             x1 = x1.to(device)
             # Draw samples from OT plan
             # only difference between ConditionalFlowMatcher and ExactOptimalTransportConditionalFlowMatcher
-            if args.use_ot:
-                x0, x1 = ot_sampler.sample_plan(x0, x1)
+            # if args.use_ot:
+            #     x0, x1 = ot_sampler.sample_plan(x0, x1)
 
             # [B], [B, D], [B, D]
             t, xt, ut = flowmatching.sample_location_and_conditional_flow(x0, x1)

@@ -21,7 +21,11 @@ def hydra_wrapper(args: DictConfig) -> None:
     # set up names for files and directories
     proj_dir = os.path.dirname(os.path.dirname(__file__))
     args.runname = f"{args['source']['trgt']}-{args.data['trgt']}"
-    if args.use_ot:
+    # lipman beats OT in priority
+    if args.fmloss == "lipman":
+        args.use_ot = False
+        args.runname += "-lipman"
+    elif args.use_ot:
         args.runname += "-ot"
     args.savedir = f"{proj_dir}/runs/{args.runname}"
     args.cpname = f"{args.cpname}_{args.n_trainsteps}"

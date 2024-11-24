@@ -92,6 +92,10 @@ def plot_trajectories(traj, n=2000, show=False, prior=True):
     # adapted from conditional-flow-matching/torchcfm/utils.py
     # n: max points to plot
     
+    # convert to numpy
+    if isinstance(traj, torch.Tensor):
+        traj = traj.detach().cpu().numpy()
+    
     fig = plt.figure(figsize=(6, 6))
     if len(traj.shape) == 2:
         # there is no flow
