@@ -15,11 +15,11 @@ ots=(True False)
 
 for use_ot in "${ots[@]}"; do
     for source in "${sources[@]}"; do
-        python scripts/tcfm.py source=${source} task=all use_ot=${use_ot} 
+        python scripts/tcfm.py source=${source} use_ot=${use_ot} 
     done
 done
 
-# MNIST
+# MNIST (will take a while to train)
 sources=("gamma" "beta" "diagonal" "laplace" "normal" "uniform" "mog" "multivariate" "datafittednormal" "8gaussians" "gaussian")
 ots=(True False)
 for use_ot in "${ots[@]}"; do
@@ -29,9 +29,9 @@ for use_ot in "${ots[@]}"; do
 done
 
 # fit a GMM and use it as source distribution
-python scripts/tcfm.py source=gmm data=mnist
+python scripts/tcfm.py source=gmm
 
-# use Lipman flow matching (only for normal source)
+# use Lipman flow matching (only for a Gaussian normal source)
 python scripts/tcfm.py source=normal fmloss=lipman
 ```
 

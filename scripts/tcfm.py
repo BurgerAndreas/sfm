@@ -16,7 +16,7 @@ from sfm.plot_int_steps import plot_integration_steps
 @hydra.main(config_name="tcfm", config_path="../src/sfm/config", version_base="1.3")
 def hydra_wrapper(args: DictConfig) -> None:
     # data=mnist
-    print("\n" + "="*60 + "\n")
+    print("\n" + "="*80 + "\n")
     
     # set up names for files and directories
     proj_dir = os.path.dirname(os.path.dirname(__file__))

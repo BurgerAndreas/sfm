@@ -45,7 +45,7 @@ from torchvision.transforms import ToPILImage
 # }
 
 def plot_integration_steps(args: DictConfig) -> None:
-    print("\n" + "-"*60 + f"\nPlotting integration steps for {args.runname}\n")
+    print("\n" + "-"*80 + f"\nPlotting integration steps for {args.runname}\n")
     
     limmin = args.plim[0]
     limmax = args.plim[1]
