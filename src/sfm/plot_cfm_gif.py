@@ -87,11 +87,12 @@ def plot_cfm_gif(args: DictConfig) -> None:
     model.load_state_dict(cp)
     
     trgtdist = get_dataset(**args.data)
-    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist)
+    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist, device=device)
 
     # sample noise
-    # sample = sample_8gaussians(nsamples) # [nsamples, 2]
-    sample = sourcedist.sample(nsamples) # [nsamples, 2]
+    # sample = sample_8gaussians(nsamples) # [nsamples, D]
+    sample = sourcedist.sample(nsamples) # [nsamples, D]
+    sample = sample.cpu()
     
     os.makedirs(PLOT_DIR_SOURCE, exist_ok=True)
     
@@ -129,11 +130,12 @@ def plot_cfm_gif(args: DictConfig) -> None:
         print(f"Saved sample to\n {fname}")
         plt.close()
     
+    
+    sample = sourcedist.sample(nsamples) # [nsamples, D]
     ts = torch.linspace(0, 1, n_frames) # [n_frames]
     # compute trajectory once, later pick time slices for gif
     if args.classcond:
         # print(" -- Stopping gif early because class conditional is not implemented yet")
-        # return # TODO@MNIST
         generated_class_list = torch.arange(10, device=device).repeat(nsamples // 10 + 1) # [100]
         generated_class_list = generated_class_list[:nsamples]
         y0 = sourcedist.sample(nsamples).to(device)
@@ -159,10 +161,11 @@ def plot_cfm_gif(args: DictConfig) -> None:
             value_range=(-1, 1), padding=0, nrow=10
         )
         img = ToPILImage()(grid)
+        plt.imshow(img)
         plt.xticks([])
         plt.yticks([])
+        plt.gca().axis("off")
         plt.tight_layout(pad=0.0)
-        plt.imshow(img)
         plt.savefig(f"{args.savedir}/gif/gentrajfinal.png", dpi=args.dpi)
         plt.close()
     else:
@@ -206,6 +209,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
                 log_probs = log_probs.reshape(Y.shape)
                 ax = axis[iplot] if n_plots > 1 else axis
                 ax.pcolormesh(X, Y, torch.exp(log_probs).cpu().numpy(), vmax=1)
+                ax.axis("off")
                 ax.set_xticks([])
                 ax.set_yticks([])
                 ax.set_xlim(limmin, limmax)
@@ -234,6 +238,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
                 width=0.015,
                 pivot="mid",
             )
+            ax.axis("off")
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_xlim(limmin, limmax)
@@ -257,6 +262,7 @@ def plot_cfm_gif(args: DictConfig) -> None:
                 ax.scatter(traj[:i, :, 0], traj[:i, :, 1], s=0.2, alpha=0.2, c=_cscheme["flow"])
                 ax.scatter(traj[0, :, 0], traj[0, :, 1], s=10, alpha=0.8, c=_cscheme["prior"])
                 ax.scatter(traj[i, :, 0], traj[i, :, 1], s=4, alpha=1, c=_cscheme["final"])
+                ax.axis("off")
                 ax.set_xticks([])
                 ax.set_yticks([])
                 ax.set_xlim(limmin, limmax)

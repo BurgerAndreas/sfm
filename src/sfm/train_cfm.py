@@ -116,9 +116,10 @@ def eval_logprob(args: DictConfig, model, device, sourcedist, trgtdist, tnoise, 
                 x=Augmenter(1, 1)(x1).to(device),
                 t_span=torch.linspace(start=tdata, end=tnoise, steps=nintsteps, device=device),
             )
-        )[-1].cpu()
+        )[-1] # [B, D+1]
         # Compute log probabilities
         # We can load the log probs later to plot the training progress
+        # logprob: [B, D] -> [B]
         log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
         logprobs_train.append([k, log_probs.nanmean().item()])
         print(f"Log-likelihood of test set: {log_probs.nanmean().item():0.3f}")
@@ -149,7 +150,7 @@ def train_cfm(args: DictConfig):
     tdata = 1 # data time
 
     trgtdist = get_dataset(**args.data)
-    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist)
+    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist, device=device)
     
     if args.source.data_dim == 2:
         # plot the target distribution

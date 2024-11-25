@@ -45,7 +45,7 @@ from torchvision.transforms import ToPILImage
 # }
 
 def plot_integration_steps(args: DictConfig) -> None:
-    print(f"Plotting integration steps for {args.runname}\n")
+    print("\n" + "-"*60 + f"\nPlotting integration steps for {args.runname}\n")
     
     limmin = args.plim[0]
     limmax = args.plim[1]
@@ -95,40 +95,69 @@ def plot_integration_steps(args: DictConfig) -> None:
         torch.float32
     )
     
-    # how many steps do we need for generation, if we use an adaptive solver?
-    if args.classcond:
-        generated_class_list = torch.arange(10, device=device).repeat(nsamples // 10 + 1) 
-        generated_class_list = generated_class_list[:nsamples]
-        y0 = sourcedist.sample(nsamples).to(device)
-        # reshape to [nsamples, 1, 28, 28]
-        y0 = y0.view(nsamples, 1, 28, 28)
-        model.nfe = 0
-        with torch.no_grad():
-            traj = torchdiffeq.odeint(
-                func=lambda t, x: model.forward(t, x, generated_class_list),
-                y0=y0,
-                # t is not the integration steps but the time points for which to solve for
-                # The first element of is taken to be the initial time point
-                t=torch.linspace(0, 1, 2, device=device),
-                atol=1e-4,
-                rtol=1e-4,
-                method="dopri5", # default solver
-            )
-        print(f"NFE={model.nfe}")
-    else:
-        ts = torch.linspace(0, 1, 2)
-        model.nfe = 0
-        nde = tdyn.NeuralODE(tdyn.DEFunc(torch_wrapper(model)), solver="dopri5").to(device)
-        # [intsteps, nsamples, D]
-        # traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
-        # if we want the number of solver steps we instead can use:
-        x, t_span = nde._prep_integration(sample.to(device), ts.to(device))
-        t_eval, traj = torchdyn.numerics.odeint(nde.vf, x, t_span, solver=nde.solver, atol=nde.atol, rtol=nde.rtol, return_all_eval=True)
-        traj = traj.detach().cpu().numpy()
-        nsolsteps = len(t_eval)
-        print(f"NFE={model.nfe}. NSolSteps={nsolsteps}")
-    # save NFE to file so we can plot it later
-    np.save(f"{tempdir}/nfe.npy", model.nfe)
+    # Try multiple adaptive solvers and average NFE over multiple runs
+    solvers = ["dopri5"]  # rk4 is another adaptive solver
+    n_runs = 5
+    nfe_results = {solver: [] for solver in solvers}
+    nsolsteps_results = {solver: [] for solver in solvers}
+
+    for solver in solvers:
+        print(f"\nTesting {solver} solver:")
+        for run in range(n_runs):
+            if args.classcond:
+                generated_class_list = torch.arange(10, device=device).repeat(nsamples // 10 + 1) 
+                generated_class_list = generated_class_list[:nsamples]
+                y0 = sourcedist.sample(nsamples).to(device)
+                # reshape to [nsamples, 1, 28, 28]
+                y0 = y0.view(nsamples, 1, 28, 28)
+                model.nfe = 0
+                with torch.no_grad():
+                    # Fixed solvers (euler, midpoint, rk4, explicit_adams, implicit_adams)
+                    # Adaptive solvers (dopri8, dopri5, bosh3, adaptive_heun
+                    traj = torchdiffeq.odeint(
+                        func=lambda t, x: model.forward(t, x, generated_class_list),
+                        y0=y0,
+                        t=torch.linspace(0, 1, 2, device=device),
+                        atol=1e-4,
+                        rtol=1e-4,
+                        method=solver,
+                    )
+                nfe_results[solver].append(model.nfe)
+                print(f"Run {run+1}: NFE={model.nfe}")
+            else:
+                ts = torch.linspace(0, 1, 2)
+                model.nfe = 0
+                # SOLVER_DICT = {'euler': Euler, 'midpoint': Midpoint,
+                #    'rk4': RungeKutta4, 'rk-4': RungeKutta4, 'RungeKutta4': RungeKutta4,
+                #    'dopri5': DormandPrince45, 'DormandPrince45': DormandPrince45, 'DormandPrince5': DormandPrince45,
+                #    'tsit5': Tsitouras45, 'Tsitouras45': Tsitouras45, 'Tsitouras5': Tsitouras45,
+                #    'ieuler': ImplicitEuler, 'implicit_euler': ImplicitEuler,
+                #    'alf': AsynchronousLeapfrog, 'AsynchronousLeapfrog': AsynchronousLeapfrog}
+                nde = tdyn.NeuralODE(tdyn.DEFunc(torch_wrapper(model)), solver=solver).to(device)
+                x, t_span = nde._prep_integration(sample.to(device), ts.to(device))
+                t_eval, traj = torchdyn.numerics.odeint(nde.vf, x, t_span, solver=nde.solver, atol=nde.atol, rtol=nde.rtol, return_all_eval=True)
+                traj = traj.detach().cpu().numpy()
+                nsolsteps = len(t_eval)
+                nfe_results[solver].append(model.nfe)
+                nsolsteps_results[solver].append(nsolsteps)
+                print(f"Run {run+1}: NFE={model.nfe}, NSolSteps={nsolsteps}")
+
+    # Calculate and print averages
+    for solver in solvers:
+        avg_nfe = sum(nfe_results[solver]) / len(nfe_results[solver])
+        std_nfe = np.std(nfe_results[solver])
+        print(f"\n{solver} average NFE: {avg_nfe:.1f} ± {std_nfe:.1f}")
+        if not args.classcond:
+            avg_nsolsteps = sum(nsolsteps_results[solver]) / len(nsolsteps_results[solver])
+            std_nsolsteps = np.std(nsolsteps_results[solver])
+            print(f"{solver} average NSolSteps: {avg_nsolsteps:.1f} ± {std_nsolsteps:.1f}")
+
+    # Save results
+    results = {
+        'nfe': nfe_results,
+        'nsolsteps': nsolsteps_results if not args.classcond else None
+    }
+    np.save(f"{tempdir}/solver_results.npy", results)
     
     # integrate up to 1 / starting from 1 using intsteps steps
     # the better the flow the faster / fewer steps still give good results
@@ -202,6 +231,7 @@ def plot_integration_steps(args: DictConfig) -> None:
                     # reshape to [nsamples, h*w]
                     traj = traj.view(nsamples, -1)
                 print(f"Euler integration: nsteps={nsteps} NFE={model.nfe}")
+                assert model.nfe <= nsteps + 1, f"NFE={model.nfe} > nsteps={nsteps} + 1"
             else:
                 # no integration, just evaluate at t=0
                 # [nsamples, h*w]
@@ -212,6 +242,7 @@ def plot_integration_steps(args: DictConfig) -> None:
             )
             img = ToPILImage()(grid)
             plt.imshow(img)
+            plt.axis("off")
             plt.xticks([])
             plt.yticks([])
             plt.tight_layout(pad=0.0)
@@ -222,6 +253,7 @@ def plot_integration_steps(args: DictConfig) -> None:
                 # [intsteps, nsamples, D]
                 traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
                 print(f"Euler integration: nsteps={nsteps} NFE={model.nfe}")
+                assert model.nfe <= nsteps + 1, f"NFE={model.nfe} > nsteps={nsteps} + 1"
             else:
                 traj = sourcedist.sample(nsamples)
             fig = plot_trajectories(traj)
@@ -230,10 +262,13 @@ def plot_integration_steps(args: DictConfig) -> None:
             # ax.scatter(traj[:i, :, 0], traj[:i, :, 1], s=0.2, alpha=0.2, c=_cscheme["flow"])
             # ax.scatter(traj[0, :, 0], traj[0, :, 1], s=10, alpha=0.8, c=_cscheme["prior"])
             # ax.scatter(traj[i, :, 0], traj[i, :, 1], s=4, alpha=1, c=_cscheme["final"])
+            # ax.axis("off")
+            # ax.set_aspect('equal') # set quadratic aspect ratio
             # ax.set_xticks([])
             # ax.set_yticks([])
             # ax.set_xlim(limmin, limmax)
             # ax.set_ylim(limmin, limmax)
+        plt.tight_layout(pad=0.0)
         plt.savefig(f"{tempdir}/gen_intsteps{nsteps}.png")
         # print(f"Saved gen to {tempdir}/gen_intsteps{intsteps}.png")
         plt.close()
@@ -284,13 +319,15 @@ def plot_integration_steps(args: DictConfig) -> None:
                 # shading{'flat', 'nearest', 'gouraud', 'auto'}
                 shading='gouraud', norm='linear'
             )
+            ax.axis("off")
+            ax.set_aspect('equal') # set quadratic aspect ratio
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_xlim(limmin, limmax)
             ax.set_ylim(limmin, limmax)
             # ax.set_title(f"{args.runname}", fontsize=30)
             # can't get rid of white border, so pad a bit to make it look cleaner
-            plt.tight_layout(pad=0.1) 
+            plt.tight_layout(pad=0.0) 
             plt.savefig(f"{tempdir}/{tplotname}_{nsteps}.png", dpi=args.dpi)
             plt.close()
     
@@ -307,7 +344,8 @@ def plot_integration_steps(args: DictConfig) -> None:
         for i, (ax, img) in enumerate(zip(axes, images)):
             ax.imshow(img)
             # remove border between plots
-            # ax.axis("off")
+            ax.axis("off")
+            ax.set_aspect('equal') # set quadratic aspect ratio
             ax.set_xticks([])
             ax.set_yticks([]) 
             # torn off minor ticks
@@ -331,7 +369,8 @@ def plot_integration_steps(args: DictConfig) -> None:
     for i, (ax, img) in enumerate(zip(axes, images)):
         ax.imshow(img)
         # remove border between plots
-        # ax.axis("off")
+        ax.axis("off")
+        ax.set_aspect('equal') # set quadratic aspect ratio
         ax.set_xticks([])
         ax.set_yticks([]) 
         # torn off minor ticks

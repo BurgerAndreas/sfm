@@ -28,6 +28,7 @@ from sfm.plotstyle import _cscheme, set_seaborn_style
 
 from torchvision.utils import make_grid
 from torchvision.transforms import ToPILImage
+import torchdiffeq
 
 PLOT_DIR_SOURCE = "plots/sources"
 
@@ -37,6 +38,7 @@ PLOT_DIR_SOURCE = "plots/sources"
 def plot_samples(args: DictConfig, sample: Tensor) -> None:
     # plot sample
     set_seaborn_style()
+    sample = sample.detach().cpu().numpy()
     plt.scatter(sample[:, 0], sample[:, 1], s=1, alpha=0.5)
     plt.tight_layout(pad=0.0)
     fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_scatter.png"
@@ -49,10 +51,10 @@ def plot_samples(args: DictConfig, sample: Tensor) -> None:
     cmap = "coolwarm"
     # cmap = sns.color_palette("Spectral", as_cmap=True)
     # plt.hist2d(
-    #     sample[:, 0].numpy(), sample[:, 1].numpy(), bins=100, cmap=cmap
+    #     sample[:, 0], sample[:, 1], bins=100, cmap=cmap
     # )
     sns.histplot(
-        x=sample[:, 0].numpy(), y=sample[:, 1].numpy(), cmap=cmap, fill=True,
+        x=sample[:, 0], y=sample[:, 1], cmap=cmap, fill=True,
         bins=100
     )
     plt.tight_layout(pad=0.0)
@@ -63,7 +65,7 @@ def plot_samples(args: DictConfig, sample: Tensor) -> None:
     
     # KDE plot
     sns.kdeplot(
-        x=sample[:, 0].numpy(), y=sample[:, 1].numpy(), cmap=cmap, fill=True
+        x=sample[:, 0], y=sample[:, 1], cmap=cmap, fill=True
     )
     plt.tight_layout(pad=0.0)
     fname = f"{PLOT_DIR_SOURCE}/{args['source']['trgt']}_kde.png"
@@ -90,7 +92,7 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
     combinedplotname = f"{tplotname}_{args['source']['trgt']}-to-{args.data['trgt']}"
     combinedplotname += f"-ot" if args.use_ot else ""
     
-    n_samples = args.plot_batch_size
+    nsamples = args.plot_batch_size
     n_t_span = args.plot_integration_steps
     n_img = 5 # number of images of the inference trajectory
     d_img = [1, 28, 28]
@@ -101,11 +103,11 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
     model.load_state_dict(cp)
     
     trgtdist = get_dataset(**args.data)
-    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist)
+    sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist, device=device)
 
     # sample noise
-    # sample = sample_8gaussians(n_samples) # [n_samples, 2]
-    sample = sourcedist.sample(n_samples) # [n_samples, 2]
+    # sample = sample_8gaussians(nsamples) # [nsamples, 2]
+    sample = sourcedist.sample(nsamples) # [nsamples, 2]
     plot_samples(args, sample)
     
     # plotting stuff for log-prob plot
@@ -124,14 +126,36 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
     # integration times
     ts = torch.linspace(0, 1, n_img, device=device) # [n_img]
     
+    sample = sourcedist.sample(nsamples) # [nsamples, 2]
     if args.classcond:
         # print(" -- Stopping sidebyside because class conditional with log-prob is not implemented yet")
         # return
         # compute trajectory once, later pick time slices for gif
-        nde = tdyn.NeuralODE(tdyn.DEFunc(torch_wrapper(model)), solver="dopri5").to(device)
-        # with torch.no_grad():
-        # [n_img, n_samples, 2]
-        traj = nde.trajectory(sample.to(device), t_span=ts.to(device)).detach().cpu().numpy()
+        generated_class_list = torch.arange(10, device=device).repeat(nsamples // 10 + 1) # [100]
+        generated_class_list = generated_class_list[:nsamples]
+        y0 = sourcedist.sample(nsamples).to(device)
+        # reshape to [nsamples, *d_img]
+        y0 = y0.view([nsamples, *d_img])
+        with torch.no_grad():
+            traj = torchdiffeq.odeint(
+                func=lambda t, x: model.forward(t, x, generated_class_list),
+                y0=y0,
+                # t is not the integration steps but the time points for which to solve for
+                # The first element of is taken to be the initial time point
+                t=ts.to(device),
+                atol=1e-4,
+                rtol=1e-4,
+                method="dopri5",
+                # for a fixed step solver, we need to specify the step size
+                # method="euler", # euler, midpoint, rk4, heun3
+                # options={"step_size": 1/intsteps},
+            )
+    # else:
+    #     # nde = tdyn.NeuralODE(tdyn.DEFunc(torch_wrapper(model)), solver="dopri5").to(device)
+    #     nde = tdyn.NeuralODE(tdyn.DEFunc(torch_wrapper(model)), solver="dopri5").to(device)
+    #     # with torch.no_grad():
+    #     # [n_img, nsamples, 2]
+    #     traj = nde.trajectory(sample.to(device), t_span=ts.to(device))
     
     set_seaborn_style()
     # integrate up to t / starting form t using n_t_span steps
@@ -159,7 +183,7 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
                             Augmenter(1, 1)(gridpoints).to(device),
                             t_span=torch.linspace(start=t, end=0, steps=n_t_span, device=device),
                         )
-                    )[-1].cpu()
+                    )[-1]
                     # log_probs = log_8gaussian_density(aug_traj[:, 1:]) - aug_traj[:, 0]
                     log_probs = sourcedist.log_prob(aug_traj[:, 1:]) - aug_traj[:, 0]
                 else:

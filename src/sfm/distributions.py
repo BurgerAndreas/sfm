@@ -492,6 +492,7 @@ class DataFittedNormal(CoupledSourceDistribution):
         mean = all_data.mean(dim=0) # [784]
         std = all_data.std(dim=0) # [784]
         std = std.clamp(min=1e-5)  # ensure positive std values
+        self.device = device
 
         # Create source distribution as multivariate normal with same mean/std as data
         self.dist = torch.distributions.Normal(
@@ -501,6 +502,18 @@ class DataFittedNormal(CoupledSourceDistribution):
     
     def sample(self, nsamples: int | tuple) -> Tensor:
         return self._sample2d(nsamples)
+    
+    def log_prob(self, x: Tensor) -> Tensor:
+        """
+        Compute the log probability of the given samples under the distribution.
+
+        Args:
+            x (torch.Tensor): Input samples.
+
+        Returns:
+            torch.Tensor: Log probabilities of the input samples.
+        """
+        return self.dist.log_prob(x.to(self.device)).sum(dim=-1)
 
 ##############################################################################
 

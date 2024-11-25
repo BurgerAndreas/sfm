@@ -37,27 +37,41 @@ class GaussianMixture():
         self.max_iter = max_iter
         self.tol = tol
         self.init_strategy = init_strategy
+        maxsamples = 100
         if hasattr(trgtdist, "trainset"):
-            all_data = torch.stack([data[0] for data in trgtdist.trainset[:10000]], dim=0)
+            # 0 because MNIST also returns class labels
+            # [:10000]
+            all_data = torch.stack([data[0] for data in trgtdist.trainset], dim=0)
+            all_data = all_data[:maxsamples]
         else:
             # sample from target distribution
-            all_data = trgtdist.sample(10000)
+            all_data = trgtdist.sample(maxsamples)
         self.fit(all_data)
         
     def initialize_parameters(self, X):
+        X = X.to(self.device)
+        # if data is [B, C, H, W], flatten it to [B, C*H*W]
+        if len(X.shape) > 2:
+            X = X.view(X.shape[0], -1)
         n_samples, n_features = X.shape
         
         if self.init_strategy == 'kmeans':
             # Use kmeans++ initialization for better starting points
-            self.means = self._kmeans_plus_plus(X, self.n_components)
+            # [n_components, D]
+            self.means = self._kmeans_plus_plus(X, self.n_components).to(self.device)
         else:
             # Random initialization
             random_idx = torch.randperm(n_samples, device=self.device)[:self.n_components]
-            self.means = X[random_idx]
+            # [n_components, D]
+            self.means = X[random_idx].to(self.device)
         
         # Initialize covariances with identity matrix scaled by data variance
+        # [n_components, D, D]
+        data_var = torch.var(X, dim=0).mean()
+        if data_var == 0:
+            data_var = 1.0  # Fallback if variance is 0
         self.covs = torch.stack([
-            torch.eye(n_features) * torch.var(X, dim=0).mean()
+            torch.eye(n_features, device=self.device) * data_var
             for _ in range(self.n_components)
         ])
         
@@ -69,11 +83,12 @@ class GaussianMixture():
         
     def _kmeans_plus_plus(self, X, k):
         """Initialize cluster centers using k-means++ algorithm"""
+        X = X.to(self.device)
         n_samples, n_features = X.shape
         centers = torch.zeros((k, n_features), device=self.device)
         
         # Choose first center randomly
-        centers[0] = X[torch.randint(n_samples, (1,), device=self.device)]
+        centers[0] = X[torch.randint(n_samples, (1,), device=X.device)]
         
         # Choose remaining centers
         for i in range(1, k):
@@ -82,6 +97,9 @@ class GaussianMixture():
                 torch.sum((X - center) ** 2, dim=1)
                 for center in centers[:i]
             ]), dim=0)[0]
+            
+            # Add small epsilon to avoid zero distances
+            distances = distances + 1e-10
             
             # Choose next center with probability proportional to distance squared
             probs = distances / distances.sum()
@@ -109,9 +127,16 @@ class GaussianMixture():
                     ).log_prob(X)
                 )
             
+            assert weighted_likelihoods[:, k].isfinite().all(), f"weighted likelihoods contain NaN or Inf"
+            assert self.covs[k].isfinite().all(), f"covariance matrix contains NaN or Inf"
+            
         # Normalize responsibilities
         total_likelihood = weighted_likelihoods.sum(dim=1, keepdim=True)
+        assert total_likelihood.isfinite().all(), f"total likelihood contains NaN or Inf"
+        assert (total_likelihood > 0).all(), f"total likelihood is not positive"
+        
         self.responsibilities = weighted_likelihoods / total_likelihood
+        assert self.responsibilities.isfinite().all(), f"responsibilities contain NaN or Inf"
         
         return torch.sum(torch.log(total_likelihood))
     
@@ -123,19 +148,34 @@ class GaussianMixture():
         self.weights = Nk / n_samples
         
         # Update means
-        self.means = torch.matmul(self.responsibilities.T, X) / Nk.unsqueeze(1)
+        self.means = torch.matmul(self.responsibilities.T, X) / Nk.unsqueeze(1).to(self.device)
+        assert self.means.isfinite().all(), f"means contain NaN or Inf"
         
         # Update covariances
         for k in range(self.n_components):
             diff = X - self.means[k]
-            self.covs[k] = torch.matmul(
-                (self.responsibilities[:, k].unsqueeze(1) * diff).T, diff
-            ) / Nk[k]
+            # self.covs[k] = torch.matmul(
+            #     (self.responsibilities[:, k].unsqueeze(1) * diff).T, diff
+            # ) / Nk[k]
+            weighted_diff = self.responsibilities[:, k].unsqueeze(1) * diff
+            self.covs[k] = torch.matmul(weighted_diff.T, diff) / Nk[k]
+            
+            # Add regularization to ensure positive definiteness
+            min_var = 1e-6
+            self.covs[k] = self.covs[k] + torch.eye(X.shape[1], device=self.device) * min_var
+            
+        self.covs = self.covs.to(self.device)
+        assert self.covs.isfinite().all(), f"covariance matrices contain NaN or Inf"
             
     def fit(self, X):
         """Fit the model to data X of shape [B, D]"""
         if isinstance(X, np.ndarray):
             X = torch.from_numpy(X)
+        
+        X = X.to(self.device)
+        # reshape x [B, 1, 28, 28] -> [B, D]
+        X = X.view(X.shape[0], -1)
+        
         self.n_features = X.shape[1]
         self.initialize_parameters(X)
         
@@ -160,8 +200,9 @@ class GaussianMixture():
         """Return the most likely component for each sample"""
         if isinstance(X, np.ndarray):
             X = torch.from_numpy(X)
+        X = X.to(self.device)
         n_samples = X.shape[0]
-        likelihoods = torch.zeros((n_samples, self.n_components))
+        likelihoods = torch.zeros((n_samples, self.n_components), device=self.device)
         
         for k in range(self.n_components):
             likelihoods[:, k] = self.weights[k] * torch.exp(
@@ -172,16 +213,18 @@ class GaussianMixture():
             
         return torch.argmax(likelihoods, dim=1)
     
-    def sample(self, n_samples):
-        """Generate samples from the fitted mixture model"""
+    def sample(self, n_samples) -> torch.Tensor:
+        """Generate samples from the fitted mixture model.
+        Returns [n_samples, D]
+        """
         # Choose components based on weights
         components = torch.multinomial(self.weights, n_samples, replacement=True)
         
         # Generate samples from chosen components
-        samples = torch.zeros((n_samples, self.n_features))
+        samples = torch.zeros((n_samples, self.n_features), device=self.device)
         for k in range(self.n_components):
             mask = components == k
-            samples[mask] = torch.distributions.MultivariateNormal(
+            samples[mask.to(self.device)] = torch.distributions.MultivariateNormal(
                 self.means[k], self.covs[k]
             ).sample((mask.sum(),))
             
@@ -199,6 +242,9 @@ class GaussianMixture():
         """
         if isinstance(x, np.ndarray):
             x = torch.from_numpy(x)
+            
+        # reshape x [B, 1, 28, 28] -> [B, D]
+        x = x.view(x.shape[0], -1)
         
         x = x.to(self.device)
         log_probs = torch.zeros(x.shape[0], self.n_components, device=self.device)

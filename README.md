@@ -10,7 +10,7 @@ and [Alexander Tong and Kilian Fatras's TorchCFM](https://github.com/atong01/con
 mamba activate sfm
 
 # Make moons
-sources=("8gaussians" "gamma" "beta" "cauchy" "diagonal" "laplace" "gaussian" "normal" "uniform" "mog" "multivariate")
+sources=("8gaussians" "gamma" "beta" "cauchy" "diagonal" "laplace" "gaussian" "normal" "uniform" "mog" "multivariate" "datafittednormal")
 ots=(True False)
 
 for use_ot in "${ots[@]}"; do
@@ -85,6 +85,7 @@ done
 ## TODO
 
 - [] MNIST integrator logprob
+- [] GMM on MNIST
 
 - [] sweep training with different inference steps
 - [] plot different inference steps sidebyside
