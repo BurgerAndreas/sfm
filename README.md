@@ -28,11 +28,21 @@ for use_ot in "${ots[@]}"; do
     done
 done
 
-# fit a GMM and use it as source distribution
+# Fit a GaussianMixtureModel and use it as source distribution
 python scripts/tcfm.py source=gmm
 
-# use Lipman flow matching (only for a Gaussian normal source)
+# Lipman flow matching (only for a Gaussian normal source)
 python scripts/tcfm.py source=normal fmloss=lipman
+
+# Examples that don't work very well
+sources=("gamma" "beta" "cauchy" "diagonal" "chi2" "dirichlet" "gumbel" "fisher" "pareto" "studentt" "lognormal")
+ots=(True False)
+
+for use_ot in "${ots[@]}"; do
+    for source in "${sources[@]}"; do
+        python scripts/tcfm.py source=${source} use_ot=${use_ot} force_retrain=True
+    done
+done
 ```
 
 ## Installation

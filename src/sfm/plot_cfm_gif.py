@@ -114,10 +114,10 @@ def plot_cfm_gif(args: DictConfig) -> None:
         plt.close()
     else:
         # plot sample as image
-        d_img = (1, 28, 28)
+        d_img = args.data.dims
         grid = make_grid(
-            sample[:100].view([-1, *d_img]).clip(-1, 1), 
-            value_range=(-1, 1), padding=0, nrow=10
+            sample[:args.plot_nrows**2].view([-1, *d_img]).clip(-1, 1), 
+            value_range=(-1, 1), padding=0, nrow=args.plot_nrows
         )
         img = ToPILImage()(grid)
         plt.imshow(img)
@@ -157,8 +157,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
             )
         grid = make_grid(
         # traj[-1, :100].view([-1, 1, 28, 28]
-        traj[-1, :100].view([-1, *d_img]).clip(-1, 1), 
-            value_range=(-1, 1), padding=0, nrow=10
+        traj[-1, :args.plot_nrows**2].view([-1, *d_img]).clip(-1, 1), 
+            value_range=(-1, 1), padding=0, nrow=args.plot_nrows
         )
         img = ToPILImage()(grid)
         plt.imshow(img)
@@ -251,8 +251,8 @@ def plot_cfm_gif(args: DictConfig) -> None:
             if args.classcond:
                 grid = make_grid(
                     # traj[-1, :100].view([-1, 1, 28, 28]
-                    traj[i, :100].view([-1, *d_img]).clip(-1, 1), 
-                    value_range=(-1, 1), padding=0, nrow=10
+                    traj[i, :args.plot_nrows**2].view([-1, *d_img]).clip(-1, 1), 
+                    value_range=(-1, 1), padding=0, nrow=args.plot_nrows
                 )
                 img = ToPILImage()(grid)
                 ax.imshow(img)

@@ -64,8 +64,8 @@ def plot_integration_steps(args: DictConfig) -> None:
     
     n_models = 1
     nsamples = args.plot_batch_size
-    max_integration_steps = args.plot_integration_steps
-    n_integration_steps = 5
+    max_integration_steps = args.plot_maxint_steps
+    n_integration_steps = args.plot_nint_steps - 1 # -1 because we include 0
     n_img = 5 # number of images of the inference trajectory
     tdata = 1
     tnoise = 0
@@ -108,8 +108,8 @@ def plot_integration_steps(args: DictConfig) -> None:
                 generated_class_list = torch.arange(10, device=device).repeat(nsamples // 10 + 1) 
                 generated_class_list = generated_class_list[:nsamples]
                 y0 = sourcedist.sample(nsamples).to(device)
-                # reshape to [nsamples, 1, 28, 28]
-                y0 = y0.view(nsamples, 1, 28, 28)
+                # reshape to [nsamples, C, H, W]
+                y0 = y0.view(nsamples, *args.data.dims)
                 model.nfe = 0
                 with torch.no_grad():
                     # Fixed solvers (euler, midpoint, rk4, explicit_adams, implicit_adams)
@@ -163,9 +163,9 @@ def plot_integration_steps(args: DictConfig) -> None:
     # the better the flow the faster / fewer steps still give good results
     # to fix the number of steps we need to use a fixed step solver
     # intsteps will include 0 and max
-    intsteps_list = torch.linspace(0, max_integration_steps, n_integration_steps)
-    intsteps_list = [int(intsteps) for intsteps in intsteps_list]
-    intsteps_list = [intsteps if intsteps != 1 else 2 for intsteps in intsteps_list]
+    intsteps_list = torch.linspace(2, max_integration_steps, n_integration_steps)
+    intsteps_list = [0] + [int(intsteps) for intsteps in intsteps_list]
+    # intsteps_list = [intsteps if intsteps != 1 else 2 for intsteps in intsteps_list]
     print(f"intsteps_list: {intsteps_list}")
     logprobs_intsteps = []
     for nsteps in tqdm(intsteps_list): 
@@ -205,9 +205,9 @@ def plot_integration_steps(args: DictConfig) -> None:
         # src/sfm/plot_cfm_gif.py
         ts = torch.linspace(0, 1, nsteps) # [intsteps]
         if args.classcond:
-            d_img = (1, 28, 28)
+            d_img = args.data.dims
             if nsteps > 0:
-                generated_class_list = torch.arange(10, device=device).repeat(nsamples // 10 + 1) # [100]
+                generated_class_list = torch.arange(args.data.nclass, device=device).repeat(nsamples // args.data.nclass + 1) # [100]
                 generated_class_list = generated_class_list[:nsamples]
                 y0 = sourcedist.sample(nsamples).to(device)
                 # reshape to [nsamples, *d_img]
@@ -236,16 +236,22 @@ def plot_integration_steps(args: DictConfig) -> None:
                 # no integration, just evaluate at t=0
                 # [nsamples, h*w]
                 traj = sourcedist.sample(nsamples)
+            plt.close()
+            # make square figure
+            fig = plt.figure(figsize=(6, 6))
             grid = make_grid(
-                traj[:100].view([-1, *d_img]).clip(-1, 1), 
-                value_range=(-1, 1), padding=0, nrow=10
+                traj[:args.plot_nrows**2].view([-1, *d_img]).clip(-1, 1), 
+                value_range=(-1, 1), padding=0, nrow=args.plot_nrows
             )
             img = ToPILImage()(grid)
-            plt.imshow(img)
-            plt.axis("off")
-            plt.xticks([])
-            plt.yticks([])
-            plt.tight_layout(pad=0.0)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.imshow(img, aspect='equal')
+            ax.axis("off")
+            # plt.gca().set_aspect('auto')
+            # plt.gca().set_adjustable('box-forced')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            # plt.tight_layout(pad=0.0)
         else:
             if nsteps > 0:
                 model.nfe = 0
@@ -320,7 +326,7 @@ def plot_integration_steps(args: DictConfig) -> None:
                 shading='gouraud', norm='linear'
             )
             ax.axis("off")
-            ax.set_aspect('equal') # set quadratic aspect ratio
+            ax.set_aspect('equal', adjustable='box') # set quadratic aspect ratio
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_xlim(limmin, limmax)
@@ -370,7 +376,7 @@ def plot_integration_steps(args: DictConfig) -> None:
         ax.imshow(img)
         # remove border between plots
         ax.axis("off")
-        ax.set_aspect('equal') # set quadratic aspect ratio
+        ax.set_aspect('equal', adjustable='box') # set quadratic aspect ratio
         ax.set_xticks([])
         ax.set_yticks([]) 
         # torn off minor ticks

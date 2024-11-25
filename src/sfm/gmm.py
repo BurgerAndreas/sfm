@@ -173,7 +173,7 @@ class GaussianMixture():
             X = torch.from_numpy(X)
         
         X = X.to(self.device)
-        # reshape x [B, 1, 28, 28] -> [B, D]
+        # reshape x [B, C, H, W] -> [B, D]
         X = X.view(X.shape[0], -1)
         
         self.n_features = X.shape[1]
@@ -243,7 +243,7 @@ class GaussianMixture():
         if isinstance(x, np.ndarray):
             x = torch.from_numpy(x)
             
-        # reshape x [B, 1, 28, 28] -> [B, D]
+        # reshape x [B, C, H, W] -> [B, D]
         x = x.view(x.shape[0], -1)
         
         x = x.to(self.device)

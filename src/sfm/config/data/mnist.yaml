@@ -2,6 +2,8 @@
 
 data:
   trgt: mnist
+  dims: [1, 28, 28]
+  nclass: 10
 
 defaults:
   - model: ../../model/unet

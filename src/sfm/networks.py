@@ -124,7 +124,7 @@ if __name__ == "__main__":
     
     # example: conditional-flow-matching/examples/images/conditional_mnist.ipynb
     # model = UNetModel(
-    #     dim=(1, 28, 28), num_channels=32, num_res_blocks=1, num_classes=10, class_cond=True
+    #     dim=(C, H, W), num_channels=32, num_res_blocks=1, num_classes=10, class_cond=True
     # )
     model = get_model(
         "unet", 

@@ -55,7 +55,7 @@ def eval_traj(args: DictConfig, model, node, device, sourcedist, tnoise, tdata, 
         if args.classcond:
             # y0: torch.Size([B, 1, 28, 28])
             y0 = sourcedist.sample(args.eval_batch_size).to(device)
-            y0 = y0.view(y0.shape[0], 1, 28, 28)
+            y0 = y0.view(y0.shape[0], *args.data.dims)
             generated_class_list = torch.arange(10, device=device).repeat(args.eval_batch_size // 10 + 1) # [100]
             generated_class_list = generated_class_list[:args.eval_batch_size]
             traj = torchdiffeq.odeint(
@@ -69,12 +69,11 @@ def eval_traj(args: DictConfig, model, node, device, sourcedist, tnoise, tdata, 
             )
             # MNIST: (2, B, 1, 28, 28) 
             # only plot the last time step
-            nrows = 3
-            _gen = traj[-1][:nrows**2]
+            _gen = traj[-1][:args.plot_nrows**2]
             # choose first 9 samples, and plot them in a 3x3 grid
             grid = make_grid(
-                _gen.view([-1, *(1, 28, 28)]).clip(-1, 1), 
-                value_range=(-1, 1), padding=0, nrow=nrows
+                _gen.view([-1, *args.data.dims]).clip(-1, 1), 
+                value_range=(-1, 1), padding=0, nrow=args.plot_nrows
             )
             img = ToPILImage()(grid)
             plt.imshow(img)
@@ -206,15 +205,15 @@ def train_cfm(args: DictConfig):
             y = data[1].to(device)  # class labels
             assert x1.shape == x0.shape, \
                 f"x1 and x0 must have the same shape but got {x1.shape} and {x0.shape}"
-            # reshape x: [B,D] -> [B,1,28,28]
-            x1 = x1.view(x1.shape[0], 1, 28, 28)
-            x0 = x0.view(x0.shape[0], 1, 28, 28)
+            # reshape x: [B,D] -> [B,C,H,W]
+            x1 = x1.view(x1.shape[0], *args.data.dims)
+            x0 = x0.view(x0.shape[0], *args.data.dims)
             if args.use_ot:
                 # same as
                 # x0, x1, y0, y1 = ot_sampler.sample_plan_with_labels(x0, x1, y0, y1)
                 # t, xt, ut = ConditionalFlowMatcher.sample_location_and_conditional_flow(x0, x1, t, False)
                 # return t, xt, ut, y0, y1
-                # [B], [B, 1, 28, 28], [B, 1, 28, 28], None, [B]
+                # [B], [B, C, H, W], [B, C, H, W], None, [B]
                 t, xt, ut, _, y1 = flowmatching.guided_sample_location_and_conditional_flow(x0, x1, y1=y)
                 vt = model(t, xt, y1)
             else:

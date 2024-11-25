@@ -95,7 +95,7 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
     nsamples = args.plot_batch_size
     n_t_span = args.plot_integration_steps
     n_img = 5 # number of images of the inference trajectory
-    d_img = [1, 28, 28]
+    d_img = args.data.dims if "dims" in args.data else (1, 28, 28)
     
     
     model = get_model(**args.model).to(device)
@@ -164,8 +164,8 @@ def plot_density_traj_sidebyside(args: DictConfig) -> None:
         
         if args.classcond:
             grid = make_grid(
-                traj[i, :100].view([-1, *d_img]).clip(-1, 1), 
-                value_range=(-1, 1), padding=0, nrow=10
+                traj[i, :args.plot_nrows**2].view([-1, *d_img]).clip(-1, 1), 
+                value_range=(-1, 1), padding=0, nrow=args.plot_nrows
             )
             img = ToPILImage()(grid)
             ax.imshow(img)

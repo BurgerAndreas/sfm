@@ -16,9 +16,17 @@ n_trainsteps: 10000
 batch_size: 256
 eval_batch_size: 2048
 plot_batch_size: 1024
-plot_integration_steps: 6 # for gif and sidebyside
+plot_integration_steps: 11 # for gif and sidebyside
 eval_integration_steps: 100 # for training
 
+# for testing limits of integration plot_int_steps.py
+plot_maxint_steps: 5
+# number of integration steps to plot side by side
+plot_nint_steps: 5
+
+# for conditional image generation like MNIST
+# plot_batch_size should be at least plot_nrows**2
+plot_nrows: 10
 
 loss_scale: 1
 lr: 0.001
