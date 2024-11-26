@@ -77,9 +77,6 @@ def plot_integration_steps(args: DictConfig) -> None:
     trgtdist = get_dataset(**args.data, device=device)
     sourcedist = get_source_distribution(**args.source, trgtdist=trgtdist, device=device)
 
-    # sample noise
-    # sample = sample_8gaussians(nsamples) # [nsamples, 2]
-    sample = sourcedist.sample(nsamples) # [nsamples, 2]
     
     # plotting stuff  
     # log-prob plot
@@ -126,6 +123,7 @@ def plot_integration_steps(args: DictConfig) -> None:
                 print(f"Run {run+1}: NFE={model.nfe}")
             else:
                 ts = torch.linspace(0, 1, 2)
+                sample = sourcedist.sample(nsamples)
                 model.nfe = 0
                 # SOLVER_DICT = {'euler': Euler, 'midpoint': Midpoint,
                 #    'rk4': RungeKutta4, 'rk-4': RungeKutta4, 'RungeKutta4': RungeKutta4,
@@ -167,6 +165,7 @@ def plot_integration_steps(args: DictConfig) -> None:
     intsteps_list = [0] + [int(intsteps) for intsteps in intsteps_list]
     # intsteps_list = [intsteps if intsteps != 1 else 2 for intsteps in intsteps_list]
     print(f"intsteps_list: {intsteps_list}")
+    sample = sourcedist.sample(nsamples) # [nsamples, D]
     logprobs_intsteps = []
     for nsteps in tqdm(intsteps_list): 
         
@@ -382,7 +381,7 @@ def plot_integration_steps(args: DictConfig) -> None:
         # torn off minor ticks
         ax.tick_params(axis='both', which='minor', length=0)
         # ax.set_title(f"T={ts[i]:0.2f}")
-    plt.tight_layout(pad=0.0)
+    plt.tight_layout(pad=0.1)
     fname = f"{args.savedir}/intsteps_gen.png"
     plt.savefig(fname, dpi=args.dpi)
     plt.close()
