@@ -5,6 +5,7 @@ outputs/*
 runs
 data/*
 
+
 learn
 
 *.pdf
@@ -12,6 +13,9 @@ learn
 **/*.svg
 **/*.gif
 **/*.pth
+
+# except img
+!img/*
 
 **/.DS_Store
 **/__pycache__

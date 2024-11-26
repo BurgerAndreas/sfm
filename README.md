@@ -3,6 +3,8 @@
 
 ![til](./img/logprob_normal_gaussian_uniform_8gaussians.png)
 
+<!-- ![til](./img/traj_8gaussians-to-moons_is11_ot.gif) ![til](./img/traj_beta-to-mnist_is11_ot.gif) -->
+
 Based on [Francois Rozet's gist](https://gist.github.com/francois-rozet/fd6a820e052157f8ac6e2aa39e16c1aa)
 and [Alexander Tong and Kilian Fatras's TorchCFM](https://github.com/atong01/conditional-flow-matching) 🙏
 
